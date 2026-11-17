@@ -19,6 +19,18 @@ on a typical homelab host.
 <sub>Real output from `labcheck --verbose`. Docker, RAID, backups and
 certificates report `SKIP` until the service or targets exist.</sub>
 
+## Quick start
+
+```bash
+pipx install https://github.com/jacoblockard2007-hub/labcheck/releases/download/v0.1.0/labcheck-0.1.0-py3-none-any.whl
+labcheck -v
+```
+
+Linux, Python 3.11+, no runtime dependencies. The wheel comes from the
+[latest release](https://github.com/jacoblockard2007-hub/labcheck/releases/latest);
+there is no PyPI listing yet. If `pipx` is missing, install it with
+`sudo apt install pipx` or `sudo dnf install pipx`.
+
 ## Why another monitoring tool?
 
 Because a homelab often has no monitoring stack yet, and a full agent is
@@ -70,14 +82,19 @@ your distribution in an issue if something behaves unexpectedly.
 
 ### From a GitHub release
 
-Every release ships a wheel, an sdist and `SHA256SUMS`. Download the wheel from
-the [latest release](https://github.com/jacoblockard2007-hub/labcheck/releases/latest)
-and install it:
+Each release ships a wheel, an sdist and `SHA256SUMS`. The quick start above
+installs the current wheel by URL. To pin a different version, download the
+asset from the [releases page](https://github.com/jacoblockard2007-hub/labcheck/releases)
+and install the file:
 
 ```bash
-python3 -m pip install \
-  https://github.com/jacoblockard2007-hub/labcheck/releases/latest/download/labcheck-0.1.0-py3-none-any.whl
+pipx install ~/Downloads/labcheck-X.Y.Z-py3-none-any.whl
+```
 
+Verify a download against the attached checksums:
+
+```bash
+sha256sum -c SHA256SUMS
 ```
 
 ### With pipx from git

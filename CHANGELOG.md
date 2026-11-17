@@ -9,6 +9,7 @@ All notable changes to labcheck are documented here. The format follows
 ### Changed
 
 - Document Fedora Linux 45 and Ubuntu 26.04 compatibility.
+- Put a pipx quick start directly below the demo.
 
 ## [0.1.0] - 2026-11-16
 

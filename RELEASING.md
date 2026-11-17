@@ -15,7 +15,8 @@ manually once the one-time PyPI setup below is complete.
 
 ## Cutting a release
 
-1. Update the version in `pyproject.toml` and `labcheck/__init__.py`.
+1. Update the version in `pyproject.toml` and `labcheck/__init__.py`, and bump
+   the wheel filename in the README quick-start command.
 2. Add an entry to `CHANGELOG.md`.
 3. Run the local checks:
 
