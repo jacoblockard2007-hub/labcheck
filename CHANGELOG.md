@@ -4,6 +4,12 @@ All notable changes to labcheck are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Test on Python 3.15 and document Fedora Linux 45 compatibility.
+
 ## [0.1.0] - 2026-11-16
 
 ### Added

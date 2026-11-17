@@ -4,6 +4,7 @@
 [![latest release](https://img.shields.io/github/v/release/jacoblockard2007-hub/labcheck?sort=semver)](https://github.com/jacoblockard2007-hub/labcheck/releases)
 [![license](https://img.shields.io/github/license/jacoblockard2007-hub/labcheck)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![platforms](https://img.shields.io/badge/platforms-Debian%2013%20%7C%20Fedora%2045-blue)](#tested-platforms)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](pyproject.toml)
 
 A dependency-free health auditor for Linux homelabs.
@@ -54,6 +55,18 @@ Requirements:
 - Python 3.11 or newer
 - Optional: `systemctl` (systemd), `docker`, `smartctl` (smartmontools),
   `timedatectl` (systemd)
+
+### Tested platforms
+
+| Distribution | Python | Verified |
+| --- | --- | --- |
+| Debian 13 (trixie), x86_64 | 3.13 | Full report on a live host |
+| Fedora Linux 45, x86_64 | 3.15 | Full report on a live host |
+| Ubuntu (GitHub Actions runners) | 3.11 – 3.15 | Test suite and packaging |
+
+Checks that need a service or configured target report `SKIP` until it exists,
+so a clean host shows `SKIP` for Docker, RAID, backups and certificates. Report
+your distribution in an issue if something behaves unexpectedly.
 
 ### From a GitHub release
 
