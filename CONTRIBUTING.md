@@ -65,5 +65,7 @@ ruff format --check labcheck tests
 Small, focused pull requests are easiest to review. Include tests for new
 behaviour and mention any user-visible change in `CHANGELOG.md`.
 
+Maintainers cutting a release should follow [RELEASING.md](RELEASING.md).
+
 By contributing, you agree that your contribution is licensed under the MIT
 license in `LICENSE`.
