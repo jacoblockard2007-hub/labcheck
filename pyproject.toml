@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "labcheck"
+version = "0.1.0"
+description = "Dependency-free health auditing for Linux homelabs"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "The labcheck contributors" }]
+keywords = [
+  "homelab",
+  "monitoring",
+  "linux",
+  "healthcheck",
+  "prometheus",
+  "systemd",
+  "docker",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jacoblockard2007-hub/labcheck"
+Repository = "https://github.com/jacoblockard2007-hub/labcheck"
+Issues = "https://github.com/jacoblockard2007-hub/labcheck/issues"
+Changelog = "https://github.com/jacoblockard2007-hub/labcheck/blob/main/CHANGELOG.md"
+
+[project.scripts]
+labcheck = "labcheck.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["labcheck"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/labcheck",
+  "/tests",
+  "/README.md",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/LICENSE",
+  "/labcheck.example.toml",
+  "/pyproject.toml",
+]

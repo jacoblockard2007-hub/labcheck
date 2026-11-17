@@ -1,0 +1,20 @@
+# Byte-compiled files and caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and build output
+.venv/
+venv/
+build/
+dist/
+
+# Editor and OS noise
+.idea/
+.vscode/
+.DS_Store

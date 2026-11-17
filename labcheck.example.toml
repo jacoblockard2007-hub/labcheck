@@ -1,0 +1,93 @@
+# labcheck example configuration
+#
+# Copy to /etc/labcheck.toml (system-wide) or
+# ~/.config/labcheck/config.toml (per user), or pass --config PATH.
+# Every section and every key is optional. Thresholds shown here match the
+# built-in defaults; list values are examples that you should adapt.
+
+[system]
+enabled = true
+# Load is compared after dividing by the number of CPU cores.
+warn_load_per_core = 1.5
+crit_load_per_core = 3.0
+warn_memory_percent = 85
+crit_memory_percent = 95
+warn_swap_percent = 50
+crit_swap_percent = 80
+# Thresholds apply to the hottest thermal sensor found, if any.
+warn_temperature_c = 75
+crit_temperature_c = 85
+check_swap = true
+
+[storage]
+enabled = true
+warn_disk_percent = 80
+crit_disk_percent = 90
+warn_inode_percent = 85
+crit_inode_percent = 95
+# Shell-style patterns, matched against mount points.
+ignore_mounts = ["/snap/*", "/var/lib/docker/*"]
+# When non-empty, only these mount points are checked. ignore_mounts still
+# applies on top of this filter.
+only_mounts = []
+# Extra filesystem types to ignore on top of the built-in pseudo filesystems.
+ignore_filesystems = ["nfs", "cifs"]
+
+[systemd]
+enabled = true
+# Each service must be active or the check is critical.
+required_services = ["ssh.service"]
+# Failed units matching these patterns are reported but do not affect status.
+allow_failed = ["apt-daily*.service", "apt-daily-upgrade*.service"]
+
+[docker]
+enabled = true
+# Containers matching these patterns must exist and be running.
+require_running = []
+# Containers matching these patterns are not counted at all.
+ignore = ["watchtower"]
+
+[raid]
+enabled = true
+
+[smart]
+# Disabled by default because smartctl is not always installed and disks are
+# not always addressable from the host.
+enabled = false
+devices = ["/dev/sda", "/dev/nvme0"]
+
+[backups]
+enabled = true
+
+# Relative paths are resolved against the directory containing this file.
+# Globs are allowed; the newest matching file is considered.
+[[backups.targets]]
+name = "database"
+path = "/srv/backups/database-*.sql.gz"
+max_age_hours = 26
+
+[[backups.targets]]
+name = "photos"
+path = "/mnt/nas/photos"
+max_age_hours = 168
+
+[certificates]
+enabled = true
+timeout_seconds = 5
+
+# labcheck retrieves the certificate but deliberately does not validate the
+# chain: the goal is expiry monitoring, and many homelabs use private CAs.
+[[certificates.targets]]
+host = "cloud.example.com"
+port = 443
+warn_days = 14
+crit_days = 7
+
+[[certificates.targets]]
+host = "192.168.1.10"
+port = 8443
+warn_days = 30
+crit_days = 10
+
+[clock]
+enabled = true
