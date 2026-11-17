@@ -63,7 +63,6 @@ Requirements:
 | Debian 13 (trixie), x86_64 | 3.13 | Full report |
 | Ubuntu 26.04.1 LTS, x86_64 | 3.14 | Full report |
 | Fedora Linux 45, x86_64 | 3.15 | Full report |
-| Ubuntu (GitHub Actions runners) | 3.11 – 3.15 | Test suite and packaging |
 
 Checks that need a service or configured target report `SKIP` until it exists,
 so a clean host shows `SKIP` for Docker, RAID, backups and certificates. Report
