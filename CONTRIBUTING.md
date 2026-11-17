@@ -38,7 +38,8 @@ With `make` and Ruff available, `make check` runs tests, lint and formatting in
 one go.
 
 Please report security problems privately as described in
-[SECURITY.md](SECURITY.md), not in a public issue.
+[SECURITY.md](SECURITY.md), not in a public issue. All participation is covered
+by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Adding a check
 

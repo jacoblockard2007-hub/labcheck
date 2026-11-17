@@ -366,7 +366,8 @@ reporting and the full security scope.
 
 ## Contributing and license
 
-Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). User-visible
-changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). User-visible changes are recorded in
+[CHANGELOG.md](CHANGELOG.md).
 
 MIT. See [LICENSE](LICENSE).
