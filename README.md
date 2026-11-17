@@ -77,7 +77,7 @@ and install it:
 ```bash
 python3 -m pip install \
   https://github.com/jacoblockard2007-hub/labcheck/releases/latest/download/labcheck-0.1.0-py3-none-any.whl
-labcheck --version
+
 ```
 
 ### With pipx from git
