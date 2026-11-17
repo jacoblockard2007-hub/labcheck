@@ -13,22 +13,10 @@ with a nagios-style status code so cron, systemd and monitoring systems can act
 on the result. It needs nothing but Python 3.11+ and the tools already present
 on a typical homelab host.
 
-```text
-$ labcheck
-labcheck 0.1.0  ·  atlas  ·  2026-06-01 12:00:00 UTC
+<img src="https://raw.githubusercontent.com/jacoblockard2007-hub/labcheck/main/docs/demo.png" alt="Terminal running labcheck -v on a Debian host" width="880">
 
-  OK    System        load 0.42 (8 cores), memory 38%, swap 2%, up 27d 4h
-  WARN  Storage       /srv at 84% used (+1 more), 5 mounts
-  OK    Services      no failed units
-  CRIT  Containers    1 unhealthy: nextcloud
-  OK    RAID          2 arrays healthy (md0, md1)
-  SKIP  SMART         no devices configured
-  OK    Backups       2 targets fresh
-  WARN  Certificates  cloud.example.com:443 9d left
-  OK    Clock         NTP synchronized
-
-Summary: 1 critical, 2 warnings, 5 ok, 1 skipped  (0.31s)
-```
+<sub>Real output from `labcheck --verbose`. Docker, RAID, backups and
+certificates report `SKIP` until the service or targets exist.</sub>
 
 ## Why another monitoring tool?
 
@@ -122,6 +110,25 @@ handy for a one-off SMART test:
 
 ```bash
 labcheck --only smart --verbose
+```
+
+### Example report
+
+```text
+$ labcheck
+labcheck 0.1.0  ·  atlas  ·  2026-06-01 12:00:00 UTC
+
+  OK    System        load 0.42 (8 cores), memory 38%, swap 2%, up 27d 4h
+  WARN  Storage       /srv at 84% used (+1 more), 5 mounts
+  OK    Services      no failed units
+  CRIT  Containers    1 unhealthy: nextcloud
+  OK    RAID          2 arrays healthy (md0, md1)
+  SKIP  SMART         no devices configured
+  OK    Backups       2 targets fresh
+  WARN  Certificates  cloud.example.com:443 9d left
+  OK    Clock         NTP synchronized
+
+Summary: 1 critical, 2 warnings, 5 ok, 1 skipped  (0.31s)
 ```
 
 ### Exit codes
