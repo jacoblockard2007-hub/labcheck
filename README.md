@@ -67,20 +67,34 @@ Requirements:
 - Optional: `systemctl` (systemd), `docker`, `smartctl` (smartmontools),
   `timedatectl` (systemd)
 
-From a checkout:
+### From a GitHub release
+
+Every release ships a wheel, an sdist and `SHA256SUMS`. Download the wheel from
+the [latest release](https://github.com/jacoblockard2007-hub/labcheck/releases/latest)
+and install it:
+
+```bash
+python3 -m pip install \
+  https://github.com/jacoblockard2007-hub/labcheck/releases/latest/download/labcheck-0.1.0-py3-none-any.whl
+labcheck --version
+```
+
+### With pipx from git
+
+```bash
+pipx install git+https://github.com/jacoblockard2007-hub/labcheck.git
+```
+
+### From a checkout
 
 ```bash
 python3 -m pip install .
 labcheck --version
 ```
 
-Or install it straight from GitHub with `pipx`:
+### Without installing
 
-```bash
-pipx install git+https://github.com/jacoblockard2007-hub/labcheck.git
-```
-
-Or run it without installing anything:
+Or run it straight from a checkout without installing anything:
 
 ```bash
 python3 -m labcheck --version

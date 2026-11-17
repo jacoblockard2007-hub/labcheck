@@ -1,22 +1,17 @@
 # Releasing labcheck
 
-Releases are published to PyPI by GitHub Actions using
-[Trusted Publishing](https://docs.pypi.org/trusted-publishers/), so no API
-tokens or secrets are stored in the repository.
+The primary distribution channel is **GitHub Releases**. When a release is
+published, the `release` workflow builds the sdist, wheel and `SHA256SUMS`, and
+attaches them to that release. Users install with:
 
-## One-time PyPI setup
+```bash
+python3 -m pip install \
+  https://github.com/jacoblockard2007-hub/labcheck/releases/latest/download/labcheck-X.Y.Z-py3-none-any.whl
+```
 
-1. Create an account at <https://pypi.org/account/register/> if needed and
-   enable two-factor authentication.
-2. Open <https://pypi.org/manage/account/publishing/> and add a **pending
-   publisher** with:
-   - PyPI project name: `labcheck`
-   - Owner: `jacoblockard2007-hub`
-   - Repository name: `labcheck`
-   - Workflow name: `publish.yml`
-   - Environment name: `pypi`
-
-The `pypi` environment already exists in the GitHub repository.
+PyPI publication is optional. The `publish` workflow is ready for
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/) and is triggered
+manually once the one-time PyPI setup below is complete.
 
 ## Cutting a release
 
@@ -25,7 +20,7 @@ The `pypi` environment already exists in the GitHub repository.
 3. Run the local checks:
 
    ```bash
-   python3 -m unittest discover -s tests -t . -v
+   make check
    python3 -m compileall -q labcheck
    ```
 
@@ -44,32 +39,53 @@ The `pypi` environment already exists in the GitHub repository.
    gh release create vX.Y.Z --title "labcheck X.Y.Z" --notes-file CHANGELOG.md
    ```
 
-6. Trigger the publish workflow manually. It is intentionally `workflow_dispatch`
-   only until the PyPI pending publisher exists, so a release step cannot fail
-   for an unconfigured project:
+   Publishing the release triggers the `release` workflow, which attaches
+   `labcheck-X.Y.Z-py3-none-any.whl`, `labcheck-X.Y.Z.tar.gz` and
+   `SHA256SUMS`. Watch it with `gh run watch`.
+
+6. Verify the assets and install the wheel in a clean environment:
+
+   ```bash
+   python3 -m venv /tmp/labcheck-check
+   /tmp/labcheck-check/bin/pip install \
+     https://github.com/jacoblockard2007-hub/labcheck/releases/download/vX.Y.Z/labcheck-X.Y.Z-py3-none-any.whl
+   /tmp/labcheck-check/bin/labcheck --version
+   ```
+
+## Optional: PyPI
+
+Only needed if you want `pip install labcheck` to work without a URL.
+
+1. Create an account at <https://pypi.org/account/register/> and enable
+   two-factor authentication.
+2. Open <https://pypi.org/manage/account/publishing/> and add a **pending
+   publisher** with:
+   - PyPI project name: `labcheck`
+   - Owner: `jacoblockard2007-hub`
+   - Repository name: `labcheck`
+   - Workflow name: `publish.yml`
+   - Environment name: `pypi`
+
+   The `pypi` environment already exists in the GitHub repository.
+3. Trigger the upload manually after the pending publisher exists:
 
    ```bash
    gh workflow run publish.yml
    gh run watch
    ```
 
-   Once the pending publisher is configured you can also add
-   `release: types: [published]` to the workflow triggers for automatic uploads.
+4. Confirm the files on <https://pypi.org/project/labcheck/>.
 
-7. Confirm the new files on <https://pypi.org/project/labcheck/> and install
-   from PyPI in a clean environment:
+The workflow is intentionally `workflow_dispatch` only until PyPI is configured,
+so creating a GitHub release never fails on an unpublished project. Once the
+publisher works, add `release: types: [published]` to `publish.yml` if you want
+automatic PyPI uploads.
 
-   ```bash
-   python3 -m venv /tmp/labcheck-check
-   /tmp/labcheck-check/bin/pip install labcheck==X.Y.Z
-   /tmp/labcheck-check/bin/labcheck --version
-   ```
+### Manual PyPI upload
 
-## Manual publishing
-
-If the workflow is unavailable, build and upload from a checkout. Use a PyPI
-API token scoped to the `labcheck` project; `twine` prompts for it, so it does
-not need to be stored anywhere.
+If Actions is unavailable, build and upload from a checkout. Use a PyPI API
+token scoped to `labcheck`; `twine` prompts for it, so it does not need to be
+stored anywhere.
 
 ```bash
 python3 -m build
