@@ -8,7 +8,7 @@ All notable changes to labcheck are documented here. The format follows
 
 ### Changed
 
-- Test on Python 3.15 and document Fedora Linux 45 compatibility.
+- Document Fedora Linux 45 and Ubuntu 26.04 compatibility.
 
 ## [0.1.0] - 2026-11-16
 
