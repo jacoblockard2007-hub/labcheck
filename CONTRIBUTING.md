@@ -34,6 +34,12 @@ ruff check labcheck tests
 ruff format --check labcheck tests
 ```
 
+With `make` and Ruff available, `make check` runs tests, lint and formatting in
+one go.
+
+Please report security problems privately as described in
+[SECURITY.md](SECURITY.md), not in a public issue.
+
 ## Adding a check
 
 1. Create `labcheck/checks/yourcheck.py` exposing `NAME`, `TITLE`,

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/jacoblockard2007-hub/labcheck/security/advisories/new
+    about: Please use private vulnerability reporting instead of a public issue.
+  - name: Usage and configuration
+    url: https://github.com/jacoblockard2007-hub/labcheck/blob/main/README.md
+    about: Installation, configuration, output modes, and Prometheus setup.
+  - name: Release guide
+    url: https://github.com/jacoblockard2007-hub/labcheck/blob/main/RELEASING.md
+    about: How releases are cut and published.

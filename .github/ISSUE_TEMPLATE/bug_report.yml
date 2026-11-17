@@ -1,0 +1,85 @@
+name: Bug report
+description: Something crashed, misreported, or behaved unexpectedly
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please remove secrets from configuration files and
+        command output before pasting them here.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the observed result and why it looks wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: labcheck version
+      description: Output of `labcheck --version`.
+      placeholder: labcheck 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python3 --version`.
+      placeholder: Python 3.13.5
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: Debian 13
+    validations:
+      required: true
+
+  - type: dropdown
+    id: check
+    attributes:
+      label: Affected check
+      options:
+        - system
+        - storage
+        - services
+        - docker
+        - raid
+        - smart
+        - backups
+        - certificates
+        - clock
+        - not check-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Verbose output
+      description: |
+        Paste the output of `labcheck --only <check> -v --json`, with secrets
+        removed.
+      render: json
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: The smallest config section that reproduces the problem.
+      render: toml

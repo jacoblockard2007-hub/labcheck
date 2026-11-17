@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a new check, output mode, or improvement
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `labcheck` stays useful by staying small. Proposals that fit the
+        dependency-free, read-only design are the easiest to accept.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the homelab situation, not just the desired flag.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should labcheck do, and what would the output look like?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools, scripts, or workarounds you use today.
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fit with the project
+      options:
+        - label: This can be implemented with the Python standard library only.
+        - label: This can be done without modifying the host.
+        - label: I can help test this on a real homelab.

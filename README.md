@@ -1,6 +1,10 @@
 # labcheck
 
 [![tests](https://github.com/jacoblockard2007-hub/labcheck/actions/workflows/tests.yml/badge.svg)](https://github.com/jacoblockard2007-hub/labcheck/actions/workflows/tests.yml)
+[![latest release](https://img.shields.io/github/v/release/jacoblockard2007-hub/labcheck?sort=semver)](https://github.com/jacoblockard2007-hub/labcheck/releases)
+[![license](https://img.shields.io/github/license/jacoblockard2007-hub/labcheck)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](pyproject.toml)
 
 A dependency-free health auditor for Linux homelabs.
 
@@ -68,6 +72,12 @@ From a checkout:
 ```bash
 python3 -m pip install .
 labcheck --version
+```
+
+Or install it straight from GitHub with `pipx`:
+
+```bash
+pipx install git+https://github.com/jacoblockard2007-hub/labcheck.git
 ```
 
 Or run it without installing anything:
@@ -323,8 +333,9 @@ python3 -m compileall -q labcheck
 python3 -m labcheck --list-checks
 ```
 
-The runtime must stay standard-library-only. New checks should get pure parser
-tests where possible and integration tests driven by fakes.
+If you have `make` and Ruff installed, `make check` runs the tests plus lint and
+format checks. The runtime must stay standard-library-only. New checks should
+get pure parser tests where possible and integration tests driven by fakes.
 
 ## Limitations
 
@@ -350,7 +361,8 @@ can reveal hostnames, mount points and service names, so protect the textfile
 collector directory accordingly.
 
 The certificate check does not send credentials and does not validate the
-certificate chain.
+certificate chain. See [SECURITY.md](SECURITY.md) for private vulnerability
+reporting and the full security scope.
 
 ## Contributing and license
 

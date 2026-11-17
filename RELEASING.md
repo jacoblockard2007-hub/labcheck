@@ -38,15 +38,25 @@ The `pypi` environment already exists in the GitHub repository.
    git push origin main --tags
    ```
 
-5. Create a GitHub release for the tag. Publishing the release triggers the
-   `publish` workflow, which builds the sdist and wheel and uploads them to
-   PyPI.
+5. Create a GitHub release for the tag:
 
    ```bash
    gh release create vX.Y.Z --title "labcheck X.Y.Z" --notes-file CHANGELOG.md
    ```
 
-6. Confirm the new files on <https://pypi.org/project/labcheck/> and install
+6. Trigger the publish workflow manually. It is intentionally `workflow_dispatch`
+   only until the PyPI pending publisher exists, so a release step cannot fail
+   for an unconfigured project:
+
+   ```bash
+   gh workflow run publish.yml
+   gh run watch
+   ```
+
+   Once the pending publisher is configured you can also add
+   `release: types: [published]` to the workflow triggers for automatic uploads.
+
+7. Confirm the new files on <https://pypi.org/project/labcheck/> and install
    from PyPI in a clean environment:
 
    ```bash
