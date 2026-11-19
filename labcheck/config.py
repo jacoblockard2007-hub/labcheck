@@ -7,6 +7,7 @@ optional; labcheck runs with sensible defaults when no file is present.
 from __future__ import annotations
 
 import math
+from datetime import datetime, timezone
 import os
 import tomllib
 from collections.abc import Mapping
@@ -75,12 +76,30 @@ class BackupTarget:
     name: str
     path: str
     max_age_hours: float = 24.0
+    timer_unit: str | None = None
+    service_unit: str | None = None
+
+
+@dataclass(frozen=True)
+class BackupSnapshotConfig:
+    enabled: bool = True
+    mountpoint: str = "/backup"
+    snapshots_dir: str = "/backup/snapshots"
+    latest_link: str = "/backup/snapshots/latest"
+    max_age_hours: float = 192.0
+    timer_unit: str | None = None
+    service_unit: str | None = None
+    name: str = "Snapshot"
+    name_prefix: str = ""
+    timestamp_format: str = "%Y-%m-%d"
 
 
 @dataclass
 class BackupsConfig:
     enabled: bool = True
     targets: list[BackupTarget] = field(default_factory=list)
+    snapshot: BackupSnapshotConfig | None = None
+    snapshots: list[BackupSnapshotConfig] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -252,19 +271,172 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
         where = f"backups.targets[{index}]"
         if not isinstance(item, Mapping):
             raise ConfigError(f"{where} must be a table")
-        _unknown_keys(item, {"name", "path", "max_age_hours"}, where, warnings)
+        _unknown_keys(
+            item,
+            {"name", "path", "max_age_hours", "timer_unit", "service_unit"},
+            where,
+            warnings,
+        )
         raw_path = _string(item, "path", "", where)
         if not raw_path:
             raise ConfigError(f"{where}.path is required")
-        path = _resolve_path(raw_path, base_dir)
-        name = _string(item, "name", Path(path).name, where)
+        target_path = _resolve_path(raw_path, base_dir)
+        name = _string(item, "name", Path(target_path).name, where)
         max_age = _number(item, "max_age_hours", 24.0, where)
         if max_age <= 0:
             raise ConfigError(f"{where}.max_age_hours must be greater than zero")
-        backup_targets.append(BackupTarget(name=name, path=path, max_age_hours=max_age))
+        timer_unit = _optional_unit(item, "timer_unit", where)
+        service_unit = _optional_unit(item, "service_unit", where)
+        if (timer_unit is None) != (service_unit is None):
+            raise ConfigError(f"{where} must specify both timer_unit and service_unit")
+        backup_targets.append(
+            BackupTarget(
+                name=name, path=target_path, max_age_hours=max_age,
+                timer_unit=timer_unit, service_unit=service_unit,
+            )
+        )
+
+    snapshot_config = None
+    if "snapshot" in backups_raw:
+        snapshot_raw = _table(backups_raw, "snapshot", "backups", warnings)
+        where = "backups.snapshot"
+        _unknown_keys(
+            snapshot_raw,
+            {
+                "enabled", "mountpoint", "snapshots_dir", "latest_link",
+                "max_age_hours", "timer_unit", "service_unit",
+            },
+            where,
+            warnings,
+        )
+
+        mountpoint = _resolve_path(
+            _string(snapshot_raw, "mountpoint", "/backup", where), base_dir
+        )
+        snapshots_dir = _resolve_path(
+            _string(snapshot_raw, "snapshots_dir", "/backup/snapshots", where),
+            base_dir,
+        )
+        latest_link = _resolve_path(
+            _string(snapshot_raw, "latest_link", "/backup/snapshots/latest", where),
+            base_dir,
+        )
+
+        for key, value in (
+            ("mountpoint", mountpoint),
+            ("snapshots_dir", snapshots_dir),
+            ("latest_link", latest_link),
+        ):
+            if not Path(value).is_absolute():
+                raise ConfigError(f"{where}.{key} must resolve to an absolute path")
+
+        max_age = _number(snapshot_raw, "max_age_hours", 192.0, where)
+        if max_age <= 0:
+            raise ConfigError(f"{where}.max_age_hours must be greater than zero")
+
+        timer_value = _string(snapshot_raw, "timer_unit", "", where)
+        service_value = _string(snapshot_raw, "service_unit", "", where)
+        if "timer_unit" in snapshot_raw and not timer_value:
+            raise ConfigError(f"{where}.timer_unit cannot be empty")
+        if "service_unit" in snapshot_raw and not service_value:
+            raise ConfigError(f"{where}.service_unit cannot be empty")
+        timer_unit = timer_value or None
+        service_unit = service_value or None
+        if (timer_unit is None) != (service_unit is None):
+            raise ConfigError(f"{where} must specify both timer_unit and service_unit")
+
+        snapshot_config = BackupSnapshotConfig(
+            enabled=_bool(snapshot_raw, "enabled", True, where),
+            mountpoint=mountpoint,
+            snapshots_dir=snapshots_dir,
+            latest_link=latest_link,
+            max_age_hours=max_age,
+            timer_unit=timer_unit,
+            service_unit=service_unit,
+        )
+
+    snapshot_configs: list[BackupSnapshotConfig] = []
+    for index, item in enumerate(
+        _table_list(backups_raw, "snapshots", "backups", warnings)
+    ):
+        where = f"backups.snapshots[{index}]"
+        _unknown_keys(item, {
+            "name", "enabled", "mountpoint", "snapshots_dir", "latest_link",
+            "max_age_hours", "timer_unit", "service_unit", "name_prefix",
+            "timestamp_format",
+        }, where, warnings)
+        raw_mount = _string(item, "mountpoint", "", where)
+        raw_snapshots = _string(item, "snapshots_dir", "", where)
+        raw_latest = _string(item, "latest_link", "", where)
+        if not raw_mount or not raw_snapshots or not raw_latest:
+            raise ConfigError(
+                f"{where} requires mountpoint, snapshots_dir, and latest_link"
+            )
+        mountpoint = _resolve_path(raw_mount, base_dir)
+        snapshots_dir = _resolve_path(raw_snapshots, base_dir)
+        latest_link = _resolve_path(raw_latest, base_dir)
+        for key, value in (
+            ("mountpoint", mountpoint),
+            ("snapshots_dir", snapshots_dir),
+            ("latest_link", latest_link),
+        ):
+            if not Path(value).is_absolute():
+                raise ConfigError(f"{where}.{key} must resolve to an absolute path")
+        max_age = _number(item, "max_age_hours", 192.0, where)
+        if max_age <= 0:
+            raise ConfigError(f"{where}.max_age_hours must be greater than zero")
+        name = _string(item, "name", Path(snapshots_dir).name, where)
+        prefix = _string(item, "name_prefix", "", where)
+        timestamp_format = _string(item, "timestamp_format", "%Y-%m-%d", where)
+        if not name or not timestamp_format:
+            raise ConfigError(f"{where}.name and timestamp_format cannot be empty")
+        if _has_strftime_directive(timestamp_format, "Z"):
+            raise ConfigError(
+                f"{where}.timestamp_format cannot use %Z; use %z for a numeric "
+                "UTC offset"
+            )
+        try:
+            # Numeric offsets are deterministic. Abbreviations (%Z) are not:
+            # strptime may accept one without attaching timezone information.
+            reference = datetime(
+                2001, 2, 3, 4, 5, 6,
+                tzinfo=timezone.utc
+                if _has_strftime_directive(timestamp_format, "z")
+                else None,
+            )
+            probe = reference.strftime(timestamp_format)
+            parsed_probe = datetime.strptime(probe, timestamp_format)
+            if parsed_probe.date() != reference.date():
+                raise ValueError("timestamp format must include year, month, and day")
+            if (
+                _has_strftime_directive(timestamp_format, "z")
+                and parsed_probe.utcoffset() is None
+            ):
+                raise ValueError("numeric UTC offset did not produce an aware timestamp")
+        except (ValueError, TypeError):
+            raise ConfigError(f"{where}.timestamp_format is invalid") from None
+        timer_unit = _optional_unit(item, "timer_unit", where)
+        service_unit = _optional_unit(item, "service_unit", where)
+        if (timer_unit is None) != (service_unit is None):
+            raise ConfigError(f"{where} must specify both timer_unit and service_unit")
+        snapshot_configs.append(BackupSnapshotConfig(
+            enabled=_bool(item, "enabled", True, where),
+            mountpoint=mountpoint, snapshots_dir=snapshots_dir,
+            latest_link=latest_link, max_age_hours=max_age,
+            timer_unit=timer_unit, service_unit=service_unit, name=name,
+            name_prefix=prefix, timestamp_format=timestamp_format,
+        ))
+    snapshot_names = [item.name for item in snapshot_configs]
+    if snapshot_config is not None:
+        snapshot_names.append(snapshot_config.name)
+    if len(snapshot_names) != len(set(snapshot_names)):
+        raise ConfigError("backup snapshot monitor names must be unique")
+
     backups = BackupsConfig(
         enabled=_bool(backups_raw, "enabled", True, "backups"),
         targets=backup_targets,
+        snapshot=snapshot_config,
+        snapshots=snapshot_configs,
     )
 
     certificates_raw = _table(raw, "certificates", "", warnings)
@@ -324,6 +496,22 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
 # -- primitive parsing -------------------------------------------------
 
 
+def _has_strftime_directive(format_string: str, directive: str) -> bool:
+    """Return whether *format_string* contains an unescaped directive."""
+    index = 0
+    while index < len(format_string):
+        if format_string[index] != "%":
+            index += 1
+            continue
+        if index + 1 < len(format_string) and format_string[index + 1] == "%":
+            index += 2
+            continue
+        if index + 1 < len(format_string) and format_string[index + 1] == directive:
+            return True
+        index += 2
+    return False
+
+
 def _where(where: str, key: str) -> str:
     return f"{where}.{key}" if where else key
 
@@ -373,7 +561,7 @@ _SECTION_KEYS = {
     "docker": {"enabled", "require_running", "ignore"},
     "raid": {"enabled"},
     "smart": {"enabled", "devices"},
-    "backups": {"enabled", "targets"},
+    "backups": {"enabled", "targets", "snapshot", "snapshots"},
     "certificates": {"enabled", "timeout_seconds", "targets"},
     "clock": {"enabled"},
 }
@@ -450,6 +638,15 @@ def _string(
     if not isinstance(value, str):
         raise ConfigError(f"{_where(where, key)} must be a string")
     return value.strip()
+
+
+def _optional_unit(table: Mapping[str, Any], key: str, where: str) -> str | None:
+    if key not in table:
+        return None
+    value = _string(table, key, "", where)
+    if not value:
+        raise ConfigError(f"{_where(where, key)} cannot be empty")
+    return value
 
 
 def _string_list(

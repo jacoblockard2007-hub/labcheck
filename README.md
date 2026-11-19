@@ -55,7 +55,7 @@ overkill for "is everything still fine?". `labcheck` is meant to be:
 | `docker` | Container states, unhealthy containers, required containers | Docker is not installed |
 | `raid` | Linux md software RAID arrays from `/proc/mdstat` | no arrays are present |
 | `smart` | SMART overall health via `smartctl` (opt-in) | no devices configured or `smartctl` missing |
-| `backups` | Age of the newest file matching each configured target | no targets configured |
+| `backups` | Freshness of configured backup files and named snapshot directories, with optional systemd schedule checks | no targets or snapshots configured |
 | `certificates` | TLS certificate expiry for remote endpoints | no targets configured |
 | `clock` | NTP synchronisation via `timedatectl` | `timedatectl` or systemd is unavailable |
 
@@ -204,6 +204,19 @@ name = "database"
 path = "/srv/backups/database-*.sql.gz"
 max_age_hours = 26
 
+# Snapshot directories are monitored using the timestamp in the directory
+# name, not directory mtime (which can change with hard-link snapshots).
+[[backups.snapshots]]
+name = "ProjectData"
+mountpoint = "/mnt/backup"
+snapshots_dir = "/mnt/backup/ProjectData/Weekly"
+latest_link = "/mnt/backup/ProjectData/Weekly/latest"
+name_prefix = "ProjectData_"
+timestamp_format = "%Y-%m-%d_%H:%M:%S"
+max_age_hours = 192
+timer_unit = "project-data-weekly.timer"
+service_unit = "project-data-weekly.service"
+
 [certificates]
 [[certificates.targets]]
 host = "cloud.example.com"
@@ -215,6 +228,19 @@ Notes:
 
 - Relative backup paths are resolved against the directory containing the
   config file.
+- Add more `[[backups.snapshots]]` tables to monitor independent snapshot
+  sets. Each requires `mountpoint`, `snapshots_dir` and `latest_link`; `name`
+  defaults to the snapshot directory's basename.
+- `name_prefix` is removed before parsing the timestamp with
+  `timestamp_format` (a Python `datetime` format). Timestamps without a numeric
+  UTC offset are interpreted in the host's local timezone. Use `%z` for an
+  explicit numeric offset; `%Z` timezone abbreviations are not supported.
+- Snapshot checks validate the mount, latest symlink containment and incomplete
+  snapshot directories. `timer_unit` and `service_unit` are optional, but must
+  be configured together. The same optional pair can be used on
+  `[[backups.targets]]` to verify a file backup's systemd schedule and last run.
+- The legacy `[backups.snapshot]` table remains supported for existing
+  configurations; new configurations should use `[[backups.snapshots]]`.
 - `ignore_mounts`, `only_mounts`, `systemd.allow_failed`,
   `docker.require_running`, and `docker.ignore` accept shell-style patterns
   (`fnmatch`).
@@ -232,7 +258,7 @@ Notes:
 | `[docker]` | `enabled`, `require_running = []`, `ignore = []` |
 | `[raid]` | `enabled` |
 | `[smart]` | `enabled = false`, `devices = []` |
-| `[backups]` | `enabled`, `[[backups.targets]]` with `name`, `path`, `max_age_hours = 24` |
+| `[backups]` | `enabled`; `[[backups.targets]]` with `name`, `path`, `max_age_hours = 24`, optional paired `timer_unit`/`service_unit`; `[[backups.snapshots]]` with `name`, `enabled`, `mountpoint`, `snapshots_dir`, `latest_link`, `name_prefix`, `timestamp_format`, `max_age_hours`, optional paired `timer_unit`/`service_unit`; legacy `[backups.snapshot]` remains supported |
 | `[certificates]` | `enabled`, `timeout_seconds = 5`, `[[certificates.targets]]` with `host`, `port = 443`, `warn_days = 14`, `crit_days = 7` |
 | `[clock]` | `enabled` |
 
@@ -341,7 +367,8 @@ Every check-specific metric is prefixed with `labcheck_`.
 | `labcheck_md_degraded` | `device` | RAID array is degraded |
 | `labcheck_md_resync_percent` | `device` | Rebuild or scrub progress |
 | `labcheck_smart_healthy` | `device` | SMART health verdict |
-| `labcheck_backup_present`, `labcheck_backup_age_hours` | `target` | Backup freshness |
+| `labcheck_backup_present`, `labcheck_backup_age_hours` | `target` | Generic file backup presence and freshness |
+| `labcheck_backup_snapshot_present`, `labcheck_backup_snapshot_age_hours`, `labcheck_backup_incomplete_snapshots` | `snapshot` | Snapshot presence, age and incomplete snapshot count |
 | `labcheck_certificate_days_remaining` | `host`, `port` | Days until expiry |
 | `labcheck_ntp_synchronized` | | Clock is synchronised |
 

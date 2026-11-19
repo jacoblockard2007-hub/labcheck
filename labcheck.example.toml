@@ -71,6 +71,52 @@ name = "photos"
 path = "/mnt/nas/photos"
 max_age_hours = 168
 
+# Optional named snapshot monitors. Multiple monitors are supported.
+# Snapshot freshness is calculated from the timestamp in the directory name,
+# not directory mtime (which can be misleading for hard-link snapshots).
+#
+# [[backups.snapshots]]
+# name = "ProjectData"
+# enabled = true
+# mountpoint = "/mnt/backup"
+# snapshots_dir = "/mnt/backup/ProjectData/Weekly"
+# latest_link = "/mnt/backup/ProjectData/Weekly/latest"
+# name_prefix = "ProjectData_"
+# timestamp_format = "%Y-%m-%d_%H:%M:%S"
+# max_age_hours = 192
+# timer_unit = "project-data-weekly.timer"
+# service_unit = "project-data-weekly.service"
+#
+# [[backups.snapshots]]
+# name = "ApplicationData"
+# mountpoint = "/mnt/backup"
+# snapshots_dir = "/mnt/backup/ApplicationData/Weekly"
+# latest_link = "/mnt/backup/ApplicationData/Weekly/latest"
+# name_prefix = "ApplicationData_"
+# timestamp_format = "%Y-%m-%d_%H:%M:%S"
+# max_age_hours = 192
+# timer_unit = "application-data-weekly.timer"
+# service_unit = "application-data-weekly.service"
+#
+# Generic file targets may also verify their systemd schedule and last run.
+# timer_unit and service_unit must be specified together.
+# [[backups.targets]]
+# name = "application-export"
+# path = "/srv/backups/application-*.zip"
+# max_age_hours = 36
+# timer_unit = "application-backup.timer"
+# service_unit = "application-backup.service"
+#
+# The legacy [backups.snapshot] table remains supported for compatibility.
+# [backups.snapshot]
+# enabled = true
+# mountpoint = "/backup"
+# snapshots_dir = "/backup/snapshots"
+# latest_link = "/backup/snapshots/latest"
+# max_age_hours = 192
+# timer_unit = "snapshot-backup.timer"
+# service_unit = "snapshot-backup.service"
+
 [certificates]
 enabled = true
 timeout_seconds = 5

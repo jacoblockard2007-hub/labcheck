@@ -171,12 +171,107 @@ class FullConfigTest(unittest.TestCase):
             [[backups.targets]]
             path = "/srv/b"
             max_age = 5
+
+            [backups.snapshot]
+            unexpected_option = true
             """
         )
         joined = "\n".join(config.warnings)
         self.assertIn("unknown_top", joined)
         self.assertIn("warn_lod_per_core", joined)
         self.assertIn("max_age", joined)
+        self.assertIn("unexpected_option", joined)
+
+
+class BackupSnapshotConfigTest(unittest.TestCase):
+    def test_snapshot_is_unconfigured_by_default(self) -> None:
+        config = Config()
+        self.assertIsNone(config.backups.snapshot)
+
+    def test_snapshot_section_uses_defaults(self) -> None:
+        config = parse("[backups.snapshot]")
+
+        snapshot = config.backups.snapshot
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertTrue(snapshot.enabled)
+        self.assertEqual(snapshot.mountpoint, "/backup")
+        self.assertEqual(snapshot.snapshots_dir, "/backup/snapshots")
+        self.assertEqual(snapshot.latest_link, "/backup/snapshots/latest")
+        self.assertEqual(snapshot.max_age_hours, 192.0)
+        self.assertIsNone(snapshot.timer_unit)
+        self.assertIsNone(snapshot.service_unit)
+
+    def test_custom_snapshot_settings(self) -> None:
+        config = parse(
+            """
+            [backups.snapshot]
+            enabled = true
+            mountpoint = "/mnt/archive"
+            snapshots_dir = "/mnt/archive/weekly"
+            latest_link = "/mnt/archive/weekly/current"
+            max_age_hours = 240
+            timer_unit = "archive.timer"
+            service_unit = "archive.service"
+            """
+        )
+
+        snapshot = config.backups.snapshot
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot.mountpoint, "/mnt/archive")
+        self.assertEqual(snapshot.snapshots_dir, "/mnt/archive/weekly")
+        self.assertEqual(snapshot.latest_link, "/mnt/archive/weekly/current")
+        self.assertEqual(snapshot.max_age_hours, 240.0)
+        self.assertEqual(snapshot.timer_unit, "archive.timer")
+        self.assertEqual(snapshot.service_unit, "archive.service")
+
+    def test_relative_snapshot_paths_resolve_against_config_directory(self) -> None:
+        base = Path("/etc/labcheck")
+        config = config_from_toml(
+            {
+                "backups": {
+                    "snapshot": {
+                        "mountpoint": "archive",
+                        "snapshots_dir": "archive/snapshots",
+                        "latest_link": "archive/snapshots/latest",
+                    }
+                }
+            },
+            base_dir=base,
+        )
+
+        snapshot = config.backups.snapshot
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot.mountpoint, str(base / "archive"))
+        self.assertEqual(snapshot.snapshots_dir, str(base / "archive/snapshots"))
+        self.assertEqual(
+            snapshot.latest_link, str(base / "archive/snapshots/latest")
+        )
+
+    def test_snapshot_can_be_disabled(self) -> None:
+        config = parse("[backups.snapshot]\nenabled = false")
+        snapshot = config.backups.snapshot
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertFalse(snapshot.enabled)
+
+    def test_generic_targets_and_snapshot_can_coexist(self) -> None:
+        config = parse(
+            """
+            [[backups.targets]]
+            name = "database"
+            path = "/srv/database.dump"
+
+            [backups.snapshot]
+            enabled = true
+            """
+        )
+
+        self.assertEqual(len(config.backups.targets), 1)
+        self.assertEqual(config.backups.targets[0].name, "database")
+        self.assertIsNotNone(config.backups.snapshot)
 
 
 class ValidationTest(unittest.TestCase):
@@ -230,6 +325,22 @@ class ValidationTest(unittest.TestCase):
             {"backups": {"targets": [{"path": "/b", "max_age_hours": 0}]}},
             "greater than zero",
         )
+
+    def test_snapshot_max_age_must_be_positive(self) -> None:
+        for max_age in (0, -1):
+            with self.subTest(max_age=max_age):
+                self.assert_invalid(
+                    {"backups": {"snapshot": {"max_age_hours": max_age}}},
+                    "greater than zero",
+                )
+
+    def test_snapshot_unit_names_cannot_be_empty(self) -> None:
+        for key in ("timer_unit", "service_unit"):
+            with self.subTest(key=key):
+                self.assert_invalid(
+                    {"backups": {"snapshot": {key: ""}}},
+                    "cannot be empty",
+                )
 
     def test_certificate_target_requires_host(self) -> None:
         self.assert_invalid(
@@ -324,6 +435,134 @@ class LoadConfigTest(unittest.TestCase):
             ):
                 self.assertEqual(find_config(), path)
 
+
+
+class GeneralizedBackupConfigTest(unittest.TestCase):
+    def test_multiple_named_snapshot_monitors(self) -> None:
+        config = parse(
+            '''
+            [[backups.snapshots]]
+            name = "Media"
+            mountpoint = "/mnt/backup"
+            snapshots_dir = "/mnt/backup/Media/Weekly"
+            latest_link = "/mnt/backup/Media/Weekly/current"
+            name_prefix = "Media_"
+            timestamp_format = "%Y-%m-%d_%H:%M:%S"
+            max_age_hours = 192
+            timer_unit = "media.timer"
+            service_unit = "media.service"
+
+            [[backups.snapshots]]
+            name = "AppData"
+            mountpoint = "/mnt/backup"
+            snapshots_dir = "/mnt/backup/AppData/Weekly"
+            latest_link = "/mnt/backup/AppData/Weekly/current"
+            name_prefix = "AppData_"
+            timestamp_format = "%Y-%m-%d_%H:%M:%S"
+            max_age_hours = 192
+            '''
+        )
+        self.assertEqual(
+            [item.name for item in config.backups.snapshots], ["Media", "AppData"]
+        )
+        self.assertEqual(
+            config.backups.snapshots[0].timestamp_format, "%Y-%m-%d_%H:%M:%S"
+        )
+        self.assertEqual(config.backups.snapshots[0].timer_unit, "media.timer")
+        self.assertIsNone(config.backups.snapshots[1].timer_unit)
+
+    def test_duplicate_snapshot_names_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "names must be unique"):
+            parse(
+                '''
+                [[backups.snapshots]]
+                name = "same"
+                mountpoint = "/backup"
+                snapshots_dir = "/backup/a"
+                latest_link = "/backup/a/latest"
+                [[backups.snapshots]]
+                name = "same"
+                mountpoint = "/backup"
+                snapshots_dir = "/backup/b"
+                latest_link = "/backup/b/latest"
+                '''
+            )
+
+    def test_snapshot_requires_timer_and_service_as_a_pair(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
+            parse(
+                '''
+                [[backups.snapshots]]
+                mountpoint = "/backup"
+                snapshots_dir = "/backup/snapshots"
+                latest_link = "/backup/snapshots/latest"
+                timer_unit = "backup.timer"
+                '''
+            )
+
+    def test_generic_target_accepts_optional_systemd_units(self) -> None:
+        config = parse(
+            '''
+            [[backups.targets]]
+            name = "Jellyfin"
+            path = "/srv/backups/*.zip"
+            max_age_hours = 36
+            timer_unit = "jellyfin-backup.timer"
+            service_unit = "jellyfin-backup.service"
+            '''
+        )
+        target = config.backups.targets[0]
+        self.assertEqual(target.timer_unit, "jellyfin-backup.timer")
+        self.assertEqual(target.service_unit, "jellyfin-backup.service")
+
+    def test_generic_target_requires_both_systemd_units(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
+            parse(
+                '''
+                [[backups.targets]]
+                path = "/srv/backups/*.zip"
+                timer_unit = "backup.timer"
+                '''
+            )
+
+    def test_snapshot_timestamp_format_must_include_a_calendar_date(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "timestamp_format is invalid"):
+            parse(
+                '''
+                [[backups.snapshots]]
+                mountpoint = "/backup"
+                snapshots_dir = "/backup/snapshots"
+                latest_link = "/backup/snapshots/latest"
+                timestamp_format = "%H:%M:%S"
+                '''
+            )
+
+    def test_snapshot_timestamp_format_rejects_timezone_abbreviations(self) -> None:
+        with self.assertRaisesRegex(ConfigError, r"cannot use %Z; use %z"):
+            parse(
+                '''
+                [[backups.snapshots]]
+                mountpoint = "/backup"
+                snapshots_dir = "/backup/snapshots"
+                latest_link = "/backup/snapshots/latest"
+                timestamp_format = "%Y-%m-%d_%H:%M:%S_%Z"
+                '''
+            )
+
+    def test_snapshot_timestamp_format_accepts_numeric_timezone_offsets(self) -> None:
+        config = parse(
+            '''
+            [[backups.snapshots]]
+            mountpoint = "/backup"
+            snapshots_dir = "/backup/snapshots"
+            latest_link = "/backup/snapshots/latest"
+            timestamp_format = "%Y-%m-%d_%H:%M:%S_%z"
+            '''
+        )
+        self.assertEqual(
+            config.backups.snapshots[0].timestamp_format,
+            "%Y-%m-%d_%H:%M:%S_%z",
+        )
 
 if __name__ == "__main__":
     unittest.main()
