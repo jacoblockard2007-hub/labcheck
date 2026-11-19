@@ -7,11 +7,11 @@ optional; labcheck runs with sensible defaults when no file is present.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
 import os
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -400,7 +400,7 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             # strptime may accept one without attaching timezone information.
             reference = datetime(
                 2001, 2, 3, 4, 5, 6,
-                tzinfo=timezone.utc
+                tzinfo=UTC
                 if _has_strftime_directive(timestamp_format, "z")
                 else None,
             )

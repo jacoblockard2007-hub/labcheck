@@ -7,8 +7,8 @@ from pathlib import Path
 
 from labcheck.checks import backups
 from labcheck.config import (
-    BackupSnapshotConfig,
     BackupsConfig,
+    BackupSnapshotConfig,
     BackupTarget,
     Config,
 )
@@ -50,9 +50,11 @@ class BackupsCheckTest(LabcheckTestCase):
                     "--property=ExecMainStartTimestamp --no-pager"
                 ): (
                     0,
-                    "Result=success\n"
-                    "ExecMainStatus=0\n"
-                    "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\n",
+                    (
+                        "Result=success\n"
+                        "ExecMainStatus=0\n"
+                        "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\n"
+                    ),
                     "",
                 ),
             },
@@ -202,8 +204,10 @@ class BackupsCheckTest(LabcheckTestCase):
         runner.responses["systemctl is-enabled snapshot-backup.timer"] = (
             1,
             "",
-            "Failed to get unit file state for snapshot-backup.timer: "
-            "No such file or directory",
+            (
+                "Failed to get unit file state for snapshot-backup.timer: "
+                "No such file or directory"
+            ),
         )
 
         result = backups.run(self.context(config=config, runner=runner))
@@ -220,9 +224,11 @@ class BackupsCheckTest(LabcheckTestCase):
         )
         runner.responses[show_command] = (
             0,
-            "Result=exit-code\\n"
-            "ExecMainStatus=1\\n"
-            "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\\n",
+            (
+                "Result=exit-code\\n"
+                "ExecMainStatus=1\\n"
+                "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\\n"
+            ),
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -238,9 +244,11 @@ class BackupsCheckTest(LabcheckTestCase):
         )
         runner.responses[show_command] = (
             0,
-            "Result=success\\n"
-            "ExecMainStatus=0\\n"
-            "ExecMainStartTimestamp=n/a\\n",
+            (
+                "Result=success\\n"
+                "ExecMainStatus=0\\n"
+                "ExecMainStartTimestamp=n/a\\n"
+            ),
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -459,8 +467,10 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
                 "systemctl is-active sample.timer": (0, "active\n", ""),
                 "systemctl show sample.service": (
                     0,
-                    "Result=success\nExecMainStatus=0\n"
-                    "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\n",
+                    (
+                        "Result=success\nExecMainStatus=0\n"
+                        "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\n"
+                    ),
                     "",
                 ),
             },
