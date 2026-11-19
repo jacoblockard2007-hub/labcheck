@@ -30,9 +30,7 @@ def run(ctx: Context) -> CheckResult:
             title=TITLE,
             status=Status.SKIP,
             summary="no backup targets configured",
-            details=[
-                "add [[backups.targets]] or [[backups.snapshots]] entries"
-            ],
+            details=["add [[backups.targets]] or [[backups.snapshots]] entries"],
         )
 
     status = Status.OK
@@ -239,8 +237,7 @@ def _check_snapshot(ctx: Context, cfg) -> CheckResult:
                 status = worse(status, Status.WARN)
                 findings.append(f"{len(incomplete)} incomplete snapshot(s)")
                 details.append(
-                    "incomplete snapshot directories found: "
-                    + ", ".join(incomplete)
+                    "incomplete snapshot directories found: " + ", ".join(incomplete)
                 )
             else:
                 details.append("no incomplete snapshot directories")
@@ -315,7 +312,7 @@ def _check_latest(
         metrics.append(Metric("backup_snapshot_present", 0, {"snapshot": cfg.name}))
         return Status.CRIT
 
-    timestamp_text = latest_real.name[len(cfg.name_prefix):]
+    timestamp_text = latest_real.name[len(cfg.name_prefix) :]
     try:
         snapshot_time = datetime.strptime(timestamp_text, cfg.timestamp_format)
         # strptime accepts some non-zero-padded values; round-tripping enforces
@@ -389,9 +386,7 @@ def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
         )
 
     enabled_state = (
-        enabled.stdout.strip().splitlines()[0]
-        if enabled.stdout.strip()
-        else "unknown"
+        enabled.stdout.strip().splitlines()[0] if enabled.stdout.strip() else "unknown"
     )
     is_enabled = enabled.returncode == 0 and enabled_state == "enabled"
     metrics.append(Metric("backup_timer_enabled", int(is_enabled), {"target": label}))
@@ -413,9 +408,7 @@ def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
         )
 
     active_state = (
-        active.stdout.strip().splitlines()[0]
-        if active.stdout.strip()
-        else "unknown"
+        active.stdout.strip().splitlines()[0] if active.stdout.strip() else "unknown"
     )
     is_active = active.returncode == 0 and active_state == "active"
     metrics.append(Metric("backup_timer_active", int(is_active), {"target": label}))

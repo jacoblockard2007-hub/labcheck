@@ -38,12 +38,8 @@ class BackupsCheckTest(LabcheckTestCase):
         runner = FakeRunner(
             available={"systemctl"},
             responses={
-                "systemctl is-enabled snapshot-backup.timer": (
-                    0, "enabled\n", ""
-                ),
-                "systemctl is-active snapshot-backup.timer": (
-                    0, "active\n", ""
-                ),
+                "systemctl is-enabled snapshot-backup.timer": (0, "enabled\n", ""),
+                "systemctl is-active snapshot-backup.timer": (0, "active\n", ""),
                 (
                     "systemctl show snapshot-backup.service "
                     "--property=Result --property=ExecMainStatus "
@@ -88,9 +84,7 @@ class BackupsCheckTest(LabcheckTestCase):
     def test_healthy_snapshot_monitoring(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
 
-        result = backups.run(
-            self.context(config=config, runner=runner)
-        )
+        result = backups.run(self.context(config=config, runner=runner))
 
         self.assertEqual(result.status.value, "ok")
         self.assertEqual(len(runner.calls), 3)
@@ -117,8 +111,6 @@ class BackupsCheckTest(LabcheckTestCase):
 
         self.assertEqual(result.status.value, "crit")
         self.assertIn("snapshot directory outside backup mount", result.summary)
-
-
 
     def test_snapshot_mount_missing_is_critical(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
@@ -184,7 +176,9 @@ class BackupsCheckTest(LabcheckTestCase):
     def test_snapshot_timer_disabled_is_critical(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
         runner.responses["systemctl is-enabled snapshot-backup.timer"] = (
-            1, "disabled\\n", ""
+            1,
+            "disabled\\n",
+            "",
         )
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
@@ -193,7 +187,9 @@ class BackupsCheckTest(LabcheckTestCase):
     def test_snapshot_timer_inactive_is_critical(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
         runner.responses["systemctl is-active snapshot-backup.timer"] = (
-            3, "inactive\\n", ""
+            3,
+            "inactive\\n",
+            "",
         )
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
@@ -244,11 +240,7 @@ class BackupsCheckTest(LabcheckTestCase):
         )
         runner.responses[show_command] = (
             0,
-            (
-                "Result=success\\n"
-                "ExecMainStatus=0\\n"
-                "ExecMainStartTimestamp=n/a\\n"
-            ),
+            ("Result=success\\nExecMainStatus=0\\nExecMainStartTimestamp=n/a\\n"),
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -264,9 +256,7 @@ class BackupsCheckTest(LabcheckTestCase):
 
     def test_incomplete_snapshot_directory_is_warning(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
-        incomplete = (
-            self.temp / "backup" / "snapshots" / ".incomplete_2026-06-01"
-        )
+        incomplete = self.temp / "backup" / "snapshots" / ".incomplete_2026-06-01"
         incomplete.mkdir()
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "warn")
@@ -344,7 +334,6 @@ class BackupsCheckTest(LabcheckTestCase):
         self.assertEqual(result.status.value, "ok")
 
 
-
 class GeneralizedSnapshotCheckTest(LabcheckTestCase):
     def _snapshot(self, name: str, *, timestamp_format: str = "%Y-%m-%d_%H:%M:%S"):
         root = self.temp / "backup"
@@ -359,11 +348,17 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
             "36 25 8:33 / /backup rw,relatime - ext4 /dev/test-backup rw\n",
         )
         from labcheck.config import BackupSnapshotConfig
+
         return BackupSnapshotConfig(
-            mountpoint="/backup", snapshots_dir="/backup/snapshots",
-            latest_link="/backup/snapshots/latest", max_age_hours=192,
-            timer_unit=None, service_unit=None, name="Media",
-            name_prefix="Media_", timestamp_format=timestamp_format,
+            mountpoint="/backup",
+            snapshots_dir="/backup/snapshots",
+            latest_link="/backup/snapshots/latest",
+            max_age_hours=192,
+            timer_unit=None,
+            service_unit=None,
+            name="Media",
+            name_prefix="Media_",
+            timestamp_format=timestamp_format,
         )
 
     def test_timestamped_snapshot_uses_name_not_directory_mtime(self) -> None:
@@ -378,8 +373,7 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
             )
             self.assertEqual(result.status.value, "ok")
             age = next(
-                m.value for m in result.metrics
-                if m.name == "backup_snapshot_age_hours"
+                m.value for m in result.metrics if m.name == "backup_snapshot_age_hours"
             )
             self.assertAlmostEqual(age, 10.0, places=2)
         finally:
@@ -404,8 +398,7 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
                 )
             )
             age = next(
-                m.value for m in result.metrics
-                if m.name == "backup_snapshot_age_hours"
+                m.value for m in result.metrics if m.name == "backup_snapshot_age_hours"
             )
             self.assertAlmostEqual(age, 1.0, places=2)
         finally:
@@ -431,10 +424,15 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
         (second_dir / "AppData_2026-06-01_02:30:13").mkdir()
         (second_dir / "latest").symlink_to("AppData_2026-06-01_02:30:13")
         second = type(first)(
-            mountpoint="/backup2", snapshots_dir="/backup2/snapshots",
-            latest_link="/backup2/snapshots/latest", max_age_hours=192,
-            timer_unit=None, service_unit=None, name="AppData",
-            name_prefix="AppData_", timestamp_format="%Y-%m-%d_%H:%M:%S",
+            mountpoint="/backup2",
+            snapshots_dir="/backup2/snapshots",
+            latest_link="/backup2/snapshots/latest",
+            max_age_hours=192,
+            timer_unit=None,
+            service_unit=None,
+            name="AppData",
+            name_prefix="AppData_",
+            timestamp_format="%Y-%m-%d_%H:%M:%S",
         )
         self.write_proc(
             "self/mountinfo",
@@ -457,8 +455,11 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
     def test_generic_target_checks_optional_systemd_units(self) -> None:
         target, _ = self._make_target()
         target = BackupTarget(
-            name=target.name, path=target.path, max_age_hours=24,
-            timer_unit="sample.timer", service_unit="sample.service",
+            name=target.name,
+            path=target.path,
+            max_age_hours=24,
+            timer_unit="sample.timer",
+            service_unit="sample.service",
         )
         runner = FakeRunner(
             available={"systemctl"},
@@ -498,7 +499,8 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
             self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
         )
         age = next(
-            metric.value for metric in result.metrics
+            metric.value
+            for metric in result.metrics
             if metric.name == "backup_snapshot_age_hours"
         )
         self.assertAlmostEqual(age, 10.0, places=2)

@@ -291,8 +291,11 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             raise ConfigError(f"{where} must specify both timer_unit and service_unit")
         backup_targets.append(
             BackupTarget(
-                name=name, path=target_path, max_age_hours=max_age,
-                timer_unit=timer_unit, service_unit=service_unit,
+                name=name,
+                path=target_path,
+                max_age_hours=max_age,
+                timer_unit=timer_unit,
+                service_unit=service_unit,
             )
         )
 
@@ -303,8 +306,13 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
         _unknown_keys(
             snapshot_raw,
             {
-                "enabled", "mountpoint", "snapshots_dir", "latest_link",
-                "max_age_hours", "timer_unit", "service_unit",
+                "enabled",
+                "mountpoint",
+                "snapshots_dir",
+                "latest_link",
+                "max_age_hours",
+                "timer_unit",
+                "service_unit",
             },
             where,
             warnings,
@@ -360,11 +368,23 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
         _table_list(backups_raw, "snapshots", "backups", warnings)
     ):
         where = f"backups.snapshots[{index}]"
-        _unknown_keys(item, {
-            "name", "enabled", "mountpoint", "snapshots_dir", "latest_link",
-            "max_age_hours", "timer_unit", "service_unit", "name_prefix",
-            "timestamp_format",
-        }, where, warnings)
+        _unknown_keys(
+            item,
+            {
+                "name",
+                "enabled",
+                "mountpoint",
+                "snapshots_dir",
+                "latest_link",
+                "max_age_hours",
+                "timer_unit",
+                "service_unit",
+                "name_prefix",
+                "timestamp_format",
+            },
+            where,
+            warnings,
+        )
         raw_mount = _string(item, "mountpoint", "", where)
         raw_snapshots = _string(item, "snapshots_dir", "", where)
         raw_latest = _string(item, "latest_link", "", where)
@@ -399,10 +419,13 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             # Numeric offsets are deterministic. Abbreviations (%Z) are not:
             # strptime may accept one without attaching timezone information.
             reference = datetime(
-                2001, 2, 3, 4, 5, 6,
-                tzinfo=UTC
-                if _has_strftime_directive(timestamp_format, "z")
-                else None,
+                2001,
+                2,
+                3,
+                4,
+                5,
+                6,
+                tzinfo=UTC if _has_strftime_directive(timestamp_format, "z") else None,
             )
             probe = reference.strftime(timestamp_format)
             parsed_probe = datetime.strptime(probe, timestamp_format)
@@ -412,20 +435,29 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
                 _has_strftime_directive(timestamp_format, "z")
                 and parsed_probe.utcoffset() is None
             ):
-                raise ValueError("numeric UTC offset did not produce an aware timestamp")
+                raise ValueError(
+                    "numeric UTC offset did not produce an aware timestamp"
+                )
         except (ValueError, TypeError):
             raise ConfigError(f"{where}.timestamp_format is invalid") from None
         timer_unit = _optional_unit(item, "timer_unit", where)
         service_unit = _optional_unit(item, "service_unit", where)
         if (timer_unit is None) != (service_unit is None):
             raise ConfigError(f"{where} must specify both timer_unit and service_unit")
-        snapshot_configs.append(BackupSnapshotConfig(
-            enabled=_bool(item, "enabled", True, where),
-            mountpoint=mountpoint, snapshots_dir=snapshots_dir,
-            latest_link=latest_link, max_age_hours=max_age,
-            timer_unit=timer_unit, service_unit=service_unit, name=name,
-            name_prefix=prefix, timestamp_format=timestamp_format,
-        ))
+        snapshot_configs.append(
+            BackupSnapshotConfig(
+                enabled=_bool(item, "enabled", True, where),
+                mountpoint=mountpoint,
+                snapshots_dir=snapshots_dir,
+                latest_link=latest_link,
+                max_age_hours=max_age,
+                timer_unit=timer_unit,
+                service_unit=service_unit,
+                name=name,
+                name_prefix=prefix,
+                timestamp_format=timestamp_format,
+            )
+        )
     snapshot_names = [item.name for item in snapshot_configs]
     if snapshot_config is not None:
         snapshot_names.append(snapshot_config.name)

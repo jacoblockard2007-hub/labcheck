@@ -246,9 +246,7 @@ class BackupSnapshotConfigTest(unittest.TestCase):
         assert snapshot is not None
         self.assertEqual(snapshot.mountpoint, str(base / "archive"))
         self.assertEqual(snapshot.snapshots_dir, str(base / "archive/snapshots"))
-        self.assertEqual(
-            snapshot.latest_link, str(base / "archive/snapshots/latest")
-        )
+        self.assertEqual(snapshot.latest_link, str(base / "archive/snapshots/latest"))
 
     def test_snapshot_can_be_disabled(self) -> None:
         config = parse("[backups.snapshot]\nenabled = false")
@@ -436,11 +434,10 @@ class LoadConfigTest(unittest.TestCase):
                 self.assertEqual(find_config(), path)
 
 
-
 class GeneralizedBackupConfigTest(unittest.TestCase):
     def test_multiple_named_snapshot_monitors(self) -> None:
         config = parse(
-            '''
+            """
             [[backups.snapshots]]
             name = "Media"
             mountpoint = "/mnt/backup"
@@ -460,7 +457,7 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
             name_prefix = "AppData_"
             timestamp_format = "%Y-%m-%d_%H:%M:%S"
             max_age_hours = 192
-            '''
+            """
         )
         self.assertEqual(
             [item.name for item in config.backups.snapshots], ["Media", "AppData"]
@@ -474,7 +471,7 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
     def test_duplicate_snapshot_names_are_rejected(self) -> None:
         with self.assertRaisesRegex(ConfigError, "names must be unique"):
             parse(
-                '''
+                """
                 [[backups.snapshots]]
                 name = "same"
                 mountpoint = "/backup"
@@ -485,31 +482,31 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
                 mountpoint = "/backup"
                 snapshots_dir = "/backup/b"
                 latest_link = "/backup/b/latest"
-                '''
+                """
             )
 
     def test_snapshot_requires_timer_and_service_as_a_pair(self) -> None:
         with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
             parse(
-                '''
+                """
                 [[backups.snapshots]]
                 mountpoint = "/backup"
                 snapshots_dir = "/backup/snapshots"
                 latest_link = "/backup/snapshots/latest"
                 timer_unit = "backup.timer"
-                '''
+                """
             )
 
     def test_generic_target_accepts_optional_systemd_units(self) -> None:
         config = parse(
-            '''
+            """
             [[backups.targets]]
             name = "Jellyfin"
             path = "/srv/backups/*.zip"
             max_age_hours = 36
             timer_unit = "jellyfin-backup.timer"
             service_unit = "jellyfin-backup.service"
-            '''
+            """
         )
         target = config.backups.targets[0]
         self.assertEqual(target.timer_unit, "jellyfin-backup.timer")
@@ -518,51 +515,52 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
     def test_generic_target_requires_both_systemd_units(self) -> None:
         with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
             parse(
-                '''
+                """
                 [[backups.targets]]
                 path = "/srv/backups/*.zip"
                 timer_unit = "backup.timer"
-                '''
+                """
             )
 
     def test_snapshot_timestamp_format_must_include_a_calendar_date(self) -> None:
         with self.assertRaisesRegex(ConfigError, "timestamp_format is invalid"):
             parse(
-                '''
+                """
                 [[backups.snapshots]]
                 mountpoint = "/backup"
                 snapshots_dir = "/backup/snapshots"
                 latest_link = "/backup/snapshots/latest"
                 timestamp_format = "%H:%M:%S"
-                '''
+                """
             )
 
     def test_snapshot_timestamp_format_rejects_timezone_abbreviations(self) -> None:
         with self.assertRaisesRegex(ConfigError, r"cannot use %Z; use %z"):
             parse(
-                '''
+                """
                 [[backups.snapshots]]
                 mountpoint = "/backup"
                 snapshots_dir = "/backup/snapshots"
                 latest_link = "/backup/snapshots/latest"
                 timestamp_format = "%Y-%m-%d_%H:%M:%S_%Z"
-                '''
+                """
             )
 
     def test_snapshot_timestamp_format_accepts_numeric_timezone_offsets(self) -> None:
         config = parse(
-            '''
+            """
             [[backups.snapshots]]
             mountpoint = "/backup"
             snapshots_dir = "/backup/snapshots"
             latest_link = "/backup/snapshots/latest"
             timestamp_format = "%Y-%m-%d_%H:%M:%S_%z"
-            '''
+            """
         )
         self.assertEqual(
             config.backups.snapshots[0].timestamp_format,
             "%Y-%m-%d_%H:%M:%S_%z",
         )
+
 
 if __name__ == "__main__":
     unittest.main()
