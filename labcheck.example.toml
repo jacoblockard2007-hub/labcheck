@@ -78,6 +78,9 @@ max_age_hours = 168
 # [[backups.snapshots]]
 # name = "ProjectData"
 # enabled = true
+# Require mountpoint to be an actual mounted filesystem (default: true).
+# Set false only when intentionally monitoring a regular directory instead.
+# check_mount = true
 # mountpoint = "/mnt/backup"
 # snapshots_dir = "/mnt/backup/ProjectData/Weekly"
 # latest_link = "/mnt/backup/ProjectData/Weekly/latest"
@@ -106,16 +109,6 @@ max_age_hours = 168
 # max_age_hours = 36
 # timer_unit = "application-backup.timer"
 # service_unit = "application-backup.service"
-#
-# The legacy [backups.snapshot] table remains supported for compatibility.
-# [backups.snapshot]
-# enabled = true
-# mountpoint = "/backup"
-# snapshots_dir = "/backup/snapshots"
-# latest_link = "/backup/snapshots/latest"
-# max_age_hours = 192
-# timer_unit = "snapshot-backup.timer"
-# service_unit = "snapshot-backup.service"
 
 [certificates]
 enabled = true

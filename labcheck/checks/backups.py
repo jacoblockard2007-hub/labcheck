@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from ..config import BackupSnapshotConfig, BackupTarget
 from ..context import Context
 from ..model import CheckResult, Metric, Status, worse
 from ..util import human_duration
@@ -19,11 +20,7 @@ DESCRIPTION = "Freshness of backup files or directories"
 
 def run(ctx: Context) -> CheckResult:
     cfg = ctx.config.backups
-    snapshot_configs = list(cfg.snapshots)
-    if cfg.snapshot is not None:
-        snapshot_configs.insert(0, cfg.snapshot)
-    snapshot_configs = [item for item in snapshot_configs if item.enabled]
-
+    snapshot_configs = [item for item in cfg.snapshots if item.enabled]
     if not cfg.targets and not snapshot_configs:
         return CheckResult(
             name=NAME,
@@ -62,7 +59,7 @@ def run(ctx: Context) -> CheckResult:
     )
 
 
-def _check_targets(ctx: Context, targets: list) -> CheckResult:
+def _check_targets(ctx: Context, targets: list[BackupTarget]) -> CheckResult:
     """Check the original generic backup targets without changing their behavior."""
     status = Status.OK
     details: list[str] = []
@@ -74,7 +71,7 @@ def _check_targets(ctx: Context, targets: list) -> CheckResult:
     for target in targets:
         if target.timer_unit and target.service_unit:
             unit_status, unit_details, unit_metrics, unit_findings = _check_units(
-                ctx, target.timer_unit, target.service_unit, target.name
+                ctx, target.timer_unit, target.service_unit, target.name, "target"
             )
             status = worse(status, unit_status)
             details.extend(unit_details)
@@ -163,51 +160,58 @@ def _check_targets(ctx: Context, targets: list) -> CheckResult:
     )
 
 
-def _check_snapshot(ctx: Context, cfg) -> CheckResult:
+def _check_snapshot(ctx: Context, cfg: BackupSnapshotConfig) -> CheckResult:
     status = Status.OK
     details: list[str] = []
     metrics: list[Metric] = []
     findings: list[str] = []
+    mount_available = not cfg.check_mount
 
-    mountinfo = ctx.read_proc("self/mountinfo")
-    if mountinfo is None:
-        status = worse(status, Status.ERROR)
-        findings.append("mount information unavailable")
-        details.append("cannot read /proc/self/mountinfo")
-    elif not _mount_is_present(mountinfo, cfg.mountpoint):
-        status = worse(status, Status.CRIT)
-        findings.append("backup mount missing")
-        details.append(f"{cfg.mountpoint}: not present in mount information")
-    else:
-        details.append(f"{cfg.mountpoint}: mounted")
+    if cfg.check_mount:
+        mountinfo = ctx.read_proc("self/mountinfo")
+        if mountinfo is None:
+            status = worse(status, Status.ERROR)
+            findings.append("mount information unavailable")
+            details.append("cannot read /proc/self/mountinfo")
+        elif not _mount_is_present(mountinfo, cfg.mountpoint):
+            status = worse(status, Status.CRIT)
+            findings.append("backup mount missing")
+            details.append(f"{cfg.mountpoint}: not present in mount information")
+        else:
+            mount_available = True
+            details.append(f"{cfg.mountpoint}: mounted")
 
     snapshots_dir = _rooted(ctx, cfg.snapshots_dir)
     latest_link = _rooted(ctx, cfg.latest_link)
     snapshots_real: Path | None = None
 
     try:
-        if snapshots_dir.is_dir():
-            snapshots_real = snapshots_dir.resolve(strict=True)
-            mountpoint_real = _rooted(ctx, cfg.mountpoint).resolve(strict=True)
+        if mount_available:
+            if snapshots_dir.is_dir():
+                snapshots_real = snapshots_dir.resolve(strict=True)
+                if cfg.check_mount:
+                    mountpoint_real = _rooted(ctx, cfg.mountpoint).resolve(strict=True)
 
-            if not snapshots_real.is_relative_to(mountpoint_real):
+                    if not snapshots_real.is_relative_to(mountpoint_real):
+                        status = worse(status, Status.CRIT)
+                        findings.append("snapshot directory outside backup mount")
+                        details.append(
+                            f"snapshot directory resolves outside {mountpoint_real}: "
+                            f"{snapshots_real}"
+                        )
+                        snapshots_real = None
+            else:
                 status = worse(status, Status.CRIT)
-                findings.append("snapshot directory outside backup mount")
-                details.append(
-                    f"snapshot directory resolves outside {mountpoint_real}: "
-                    f"{snapshots_real}"
-                )
-                snapshots_real = None
-        else:
-            status = worse(status, Status.CRIT)
-            findings.append("snapshot directory missing")
-            details.append(f"snapshot directory missing: {snapshots_dir}")
+                findings.append("snapshot directory missing")
+                details.append(f"snapshot directory missing: {snapshots_dir}")
     except (OSError, RuntimeError) as exc:
         status = worse(status, Status.ERROR)
         findings.append("snapshot directory inaccessible")
         details.append(f"cannot inspect backup paths: {exc}")
 
-    if snapshots_real is not None:
+    if snapshots_real is None:
+        metrics.append(Metric("backup_snapshot_present", 0, {"snapshot": cfg.name}))
+    else:
         latest_status = _check_latest(
             ctx,
             cfg,
@@ -248,7 +252,7 @@ def _check_snapshot(ctx: Context, cfg) -> CheckResult:
 
     if cfg.timer_unit and cfg.service_unit:
         systemd_status, systemd_details, systemd_metrics, systemd_findings = (
-            _check_units(ctx, cfg.timer_unit, cfg.service_unit, cfg.name)
+            _check_units(ctx, cfg.timer_unit, cfg.service_unit, cfg.name, "snapshot")
         )
         status = worse(status, systemd_status)
         details.extend(systemd_details)
@@ -315,10 +319,18 @@ def _check_latest(
     timestamp_text = latest_real.name[len(cfg.name_prefix) :]
     try:
         snapshot_time = datetime.strptime(timestamp_text, cfg.timestamp_format)
-        # strptime accepts some non-zero-padded values; round-tripping enforces
-        # the exact configured directory-name representation.
-        if snapshot_time.strftime(cfg.timestamp_format) != timestamp_text:
-            raise ValueError("timestamp does not match format exactly")
+        # Keep standard calendar dates zero-padded without requiring the
+        # entire timestamp to round-trip identically through strftime.
+        if "%Y-%m-%d" in cfg.timestamp_format:
+            before_format, _after_format = cfg.timestamp_format.split("%Y-%m-%d", 1)
+            prefix = snapshot_time.strftime(before_format)
+            if not timestamp_text.startswith(prefix):
+                raise ValueError("date does not match format exactly")
+            date_start = len(prefix)
+            date_text = timestamp_text[date_start : date_start + 10]
+            if date_text != snapshot_time.strftime("%Y-%m-%d"):
+                raise ValueError("date does not match format exactly")
+
         if snapshot_time.tzinfo is None:
             # Backup scripts commonly embed the host's local wall-clock time
             # in directory names. Interpret naive timestamps in the host's
@@ -359,7 +371,9 @@ def _check_latest(
     return Status.OK
 
 
-def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
+def _check_units(
+    ctx: Context, timer_unit: str, service_unit: str, label: str, label_key: str
+):
     details: list[str] = []
     metrics: list[Metric] = []
     findings: list[str] = []
@@ -388,8 +402,12 @@ def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
     enabled_state = (
         enabled.stdout.strip().splitlines()[0] if enabled.stdout.strip() else "unknown"
     )
-    is_enabled = enabled.returncode == 0 and enabled_state == "enabled"
-    metrics.append(Metric("backup_timer_enabled", int(is_enabled), {"target": label}))
+    is_enabled = enabled.returncode == 0 and enabled_state in {
+        "enabled",
+        "static",
+        "indirect",
+    }
+    metrics.append(Metric("backup_timer_enabled", int(is_enabled), {label_key: label}))
     details.append(f"{timer_unit}: enabled state {enabled_state}")
     if not is_enabled:
         status = worse(status, Status.CRIT)
@@ -411,7 +429,7 @@ def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
         active.stdout.strip().splitlines()[0] if active.stdout.strip() else "unknown"
     )
     is_active = active.returncode == 0 and active_state == "active"
-    metrics.append(Metric("backup_timer_active", int(is_active), {"target": label}))
+    metrics.append(Metric("backup_timer_active", int(is_active), {label_key: label}))
     details.append(f"{timer_unit}: active state {active_state}")
     if not is_active:
         status = worse(status, Status.CRIT)
@@ -456,7 +474,9 @@ def _check_units(ctx: Context, timer_unit: str, service_unit: str, label: str):
     has_started = bool(started) and started.strip().lower() != "n/a"
     successful = result == "success" and exit_status == "0" and has_started
 
-    metrics.append(Metric("backup_service_success", int(successful), {"target": label}))
+    metrics.append(
+        Metric("backup_service_success", int(successful), {label_key: label})
+    )
     details.append(
         f"{service_unit}: result={result or 'unknown'}, "
         f"exit_status={exit_status or 'unknown'}, "

@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import time as time_module
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from labcheck.checks import backups
 from labcheck.config import (
@@ -60,7 +62,7 @@ class BackupsCheckTest(LabcheckTestCase):
             timer_unit="snapshot-backup.timer",
             service_unit="snapshot-backup.service",
         )
-        config = Config(backups=BackupsConfig(snapshot=snapshot))
+        config = Config(backups=BackupsConfig(snapshots=[snapshot]))
         return config, runner
 
     def make_target(
@@ -88,10 +90,45 @@ class BackupsCheckTest(LabcheckTestCase):
 
         self.assertEqual(result.status.value, "ok")
         self.assertEqual(len(runner.calls), 3)
+        systemd_metrics = [
+            metric
+            for metric in result.metrics
+            if metric.name
+            in {
+                "backup_timer_enabled",
+                "backup_timer_active",
+                "backup_service_success",
+            }
+        ]
+        self.assertEqual(len(systemd_metrics), 3)
+        self.assertTrue(
+            all(metric.labels == {"snapshot": "Snapshot"} for metric in systemd_metrics)
+        )
         self.assertTrue(all(call[0] == "systemctl" for call in runner.calls))
 
         details = "\n".join(result.details)
         self.assertIn("2026-06-01", details)
+
+    def test_snapshot_timer_static_and_indirect_states_are_accepted(self) -> None:
+        config, runner = self.prepare_snapshot_fixture()
+
+        for enabled_state in ("static", "indirect"):
+            with self.subTest(enabled_state=enabled_state):
+                runner.responses["systemctl is-enabled snapshot-backup.timer"] = (
+                    0,
+                    f"{enabled_state}\n",
+                    "",
+                )
+
+                result = backups.run(self.context(config=config, runner=runner))
+
+                self.assertEqual(result.status.value, "ok")
+                enabled_metric = next(
+                    metric
+                    for metric in result.metrics
+                    if metric.name == "backup_timer_enabled"
+                )
+                self.assertEqual(enabled_metric.value, 1)
 
     def test_snapshot_directory_outside_mount_is_critical(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
@@ -116,11 +153,19 @@ class BackupsCheckTest(LabcheckTestCase):
         config, runner = self.prepare_snapshot_fixture()
         self.write_proc(
             "self/mountinfo",
-            "36 25 8:33 / /other rw,relatime - ext4 /dev/test-backup rw\\n",
+            "36 25 8:33 / /other rw,relatime - ext4 /dev/test-backup rw\n",
         )
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
         self.assertIn("backup mount missing", result.summary)
+
+        presence = [
+            metric
+            for metric in result.metrics
+            if metric.name == "backup_snapshot_present"
+        ]
+        self.assertEqual(len(presence), 1)
+        self.assertEqual(presence[0].value, 0)
 
     def test_snapshot_mountinfo_unavailable_is_error(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
@@ -128,6 +173,33 @@ class BackupsCheckTest(LabcheckTestCase):
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "error")
         self.assertIn("mount information unavailable", result.summary)
+
+        presence = [
+            metric
+            for metric in result.metrics
+            if metric.name == "backup_snapshot_present"
+        ]
+        self.assertEqual(len(presence), 1)
+        self.assertEqual(presence[0].value, 0)
+
+    def test_snapshot_directory_missing_emits_absent_metric(self) -> None:
+        config, runner = self.prepare_snapshot_fixture()
+        snapshots = self.temp / "backup" / "snapshots"
+        (snapshots / "latest").unlink()
+        (snapshots / "2026-06-01").rmdir()
+        snapshots.rmdir()
+
+        result = backups.run(self.context(config=config, runner=runner))
+
+        self.assertEqual(result.status.value, "crit")
+        self.assertIn("snapshot directory missing", result.summary)
+        presence = [
+            metric
+            for metric in result.metrics
+            if metric.name == "backup_snapshot_present"
+        ]
+        self.assertEqual(len(presence), 1)
+        self.assertEqual(presence[0].value, 0)
 
     def test_snapshot_latest_missing_is_critical(self) -> None:
         config, runner = self.prepare_snapshot_fixture()
@@ -177,7 +249,7 @@ class BackupsCheckTest(LabcheckTestCase):
         config, runner = self.prepare_snapshot_fixture()
         runner.responses["systemctl is-enabled snapshot-backup.timer"] = (
             1,
-            "disabled\\n",
+            "disabled\n",
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -188,7 +260,7 @@ class BackupsCheckTest(LabcheckTestCase):
         config, runner = self.prepare_snapshot_fixture()
         runner.responses["systemctl is-active snapshot-backup.timer"] = (
             3,
-            "inactive\\n",
+            "inactive\n",
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -221,9 +293,9 @@ class BackupsCheckTest(LabcheckTestCase):
         runner.responses[show_command] = (
             0,
             (
-                "Result=exit-code\\n"
-                "ExecMainStatus=1\\n"
-                "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\\n"
+                "Result=exit-code\n"
+                "ExecMainStatus=1\n"
+                "ExecMainStartTimestamp=Mon 2026-06-01 01:00:00 UTC\n"
             ),
             "",
         )
@@ -240,7 +312,7 @@ class BackupsCheckTest(LabcheckTestCase):
         )
         runner.responses[show_command] = (
             0,
-            ("Result=success\\nExecMainStatus=0\\nExecMainStartTimestamp=n/a\\n"),
+            ("Result=success\nExecMainStatus=0\nExecMainStartTimestamp=n/a\n"),
             "",
         )
         result = backups.run(self.context(config=config, runner=runner))
@@ -361,51 +433,64 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
             timestamp_format=timestamp_format,
         )
 
+    def test_snapshot_mount_check_can_be_disabled(self) -> None:
+        cfg = self._snapshot("Media_2026-06-01_02:00:15")
+
+        cfg = replace(cfg, check_mount=False)
+        (self.proc / "self" / "mountinfo").unlink()
+
+        result = backups.run(
+            self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
+        )
+
+        self.assertEqual(result.status.value, "ok")
+        presence = [
+            metric
+            for metric in result.metrics
+            if metric.name == "backup_snapshot_present"
+        ]
+        self.assertEqual(len(presence), 1)
+        self.assertEqual(presence[0].value, 1)
+
     def test_timestamped_snapshot_uses_name_not_directory_mtime(self) -> None:
         # Pin UTC so this test remains deterministic on hosts in other timezones.
-        previous_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "UTC"
-        time_module.tzset()
         try:
-            cfg = self._snapshot("Media_2026-06-01_02:00:15")
-            result = backups.run(
-                self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
-            )
-            self.assertEqual(result.status.value, "ok")
-            age = next(
-                m.value for m in result.metrics if m.name == "backup_snapshot_age_hours"
-            )
-            self.assertAlmostEqual(age, 10.0, places=2)
+            with patch.dict(os.environ, {"TZ": "UTC"}):
+                time_module.tzset()
+                cfg = self._snapshot("Media_2026-06-01_02:00:15")
+                result = backups.run(
+                    self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
+                )
+                self.assertEqual(result.status.value, "ok")
+                age = next(
+                    m.value
+                    for m in result.metrics
+                    if m.name == "backup_snapshot_age_hours"
+                )
+                self.assertAlmostEqual(age, 10.0, places=2)
         finally:
-            if previous_tz is None:
-                os.environ.pop("TZ", None)
-            else:
-                os.environ["TZ"] = previous_tz
             time_module.tzset()
 
     def test_naive_snapshot_timestamp_uses_host_local_timezone(self) -> None:
-        previous_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "America/New_York"
-        time_module.tzset()
         try:
-            cfg = self._snapshot("Media_2026-06-01_11:00:00")
-            # 16:00 UTC is noon in New York on this date; the snapshot is 11:00 EDT.
-            now = FIXED_NOW.replace(hour=16)
-            result = backups.run(
-                self.context(
-                    config=Config(backups=BackupsConfig(snapshots=[cfg])),
-                    now=now,
+            with patch.dict(os.environ, {"TZ": "America/New_York"}):
+                time_module.tzset()
+                cfg = self._snapshot("Media_2026-06-01_11:00:00")
+                # 16:00 UTC is noon in New York on this date; the snapshot is 11:00 EDT.
+                now = FIXED_NOW.replace(hour=16)
+                result = backups.run(
+                    self.context(
+                        config=Config(backups=BackupsConfig(snapshots=[cfg])),
+                        now=now,
+                    )
                 )
-            )
-            age = next(
-                m.value for m in result.metrics if m.name == "backup_snapshot_age_hours"
-            )
-            self.assertAlmostEqual(age, 1.0, places=2)
+                age = next(
+                    m.value
+                    for m in result.metrics
+                    if m.name == "backup_snapshot_age_hours"
+                )
+                self.assertAlmostEqual(age, 1.0, places=2)
         finally:
-            if previous_tz is None:
-                os.environ.pop("TZ", None)
-            else:
-                os.environ["TZ"] = previous_tz
             time_module.tzset()
 
     def test_impossible_timestamp_is_critical(self) -> None:
@@ -484,6 +569,20 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
         )
         self.assertEqual(result.status.value, "ok")
         self.assertEqual(len(runner.calls), 3)
+        systemd_metrics = [
+            metric
+            for metric in result.metrics
+            if metric.name
+            in {
+                "backup_timer_enabled",
+                "backup_timer_active",
+                "backup_service_success",
+            }
+        ]
+        self.assertEqual(len(systemd_metrics), 3)
+        self.assertTrue(
+            all(metric.labels == {"target": "archive"} for metric in systemd_metrics)
+        )
 
     def _make_target(self):
         path = self.temp / "archive.zip"
@@ -504,6 +603,48 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
             if metric.name == "backup_snapshot_age_hours"
         )
         self.assertAlmostEqual(age, 10.0, places=2)
+
+    def test_colon_timezone_offset_is_respected(self) -> None:
+        cfg = self._snapshot(
+            "Media_2026-06-01_02:00:00_+00:00",
+            timestamp_format="%Y-%m-%d_%H:%M:%S_%z",
+        )
+        result = backups.run(
+            self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
+        )
+        self.assertEqual(result.status.value, "ok")
+
+    def test_z_timezone_offset_is_respected(self) -> None:
+        cfg = self._snapshot(
+            "Media_2026-06-01_02:00:00_Z",
+            timestamp_format="%Y-%m-%d_%H:%M:%S_%z",
+        )
+        result = backups.run(
+            self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
+        )
+        self.assertEqual(result.status.value, "ok")
+
+    def test_fractional_seconds_accept_one_to_six_digits(self) -> None:
+        timestamp_format = "%Y-%m-%d_%H:%M:%S.%f"
+        cfg = self._snapshot(
+            "Media_2026-06-01_02:00:00.1",
+            timestamp_format=timestamp_format,
+        )
+        snapshots = self.temp / "backup" / "snapshots"
+        latest = snapshots / "latest"
+
+        for fraction in ("1", "123", "123456"):
+            with self.subTest(fraction=fraction):
+                name = f"Media_2026-06-01_02:00:00.{fraction}"
+                snapshot_dir = snapshots / name
+                snapshot_dir.mkdir(exist_ok=True)
+                latest.unlink()
+                latest.symlink_to(name)
+
+                result = backups.run(
+                    self.context(config=Config(backups=BackupsConfig(snapshots=[cfg])))
+                )
+                self.assertEqual(result.status.value, "ok")
 
 
 if __name__ == "__main__":

@@ -172,104 +172,52 @@ class FullConfigTest(unittest.TestCase):
             path = "/srv/b"
             max_age = 5
 
-            [backups.snapshot]
-            unexpected_option = true
             """
         )
         joined = "\n".join(config.warnings)
         self.assertIn("unknown_top", joined)
         self.assertIn("warn_lod_per_core", joined)
         self.assertIn("max_age", joined)
-        self.assertIn("unexpected_option", joined)
 
 
 class BackupSnapshotConfigTest(unittest.TestCase):
-    def test_snapshot_is_unconfigured_by_default(self) -> None:
-        config = Config()
-        self.assertIsNone(config.backups.snapshot)
-
-    def test_snapshot_section_uses_defaults(self) -> None:
-        config = parse("[backups.snapshot]")
-
-        snapshot = config.backups.snapshot
-        self.assertIsNotNone(snapshot)
-        assert snapshot is not None
-        self.assertTrue(snapshot.enabled)
-        self.assertEqual(snapshot.mountpoint, "/backup")
-        self.assertEqual(snapshot.snapshots_dir, "/backup/snapshots")
-        self.assertEqual(snapshot.latest_link, "/backup/snapshots/latest")
-        self.assertEqual(snapshot.max_age_hours, 192.0)
-        self.assertIsNone(snapshot.timer_unit)
-        self.assertIsNone(snapshot.service_unit)
-
-    def test_custom_snapshot_settings(self) -> None:
+    def test_legacy_snapshot_section_is_not_supported(self) -> None:
         config = parse(
             """
             [backups.snapshot]
             enabled = true
-            mountpoint = "/mnt/archive"
-            snapshots_dir = "/mnt/archive/weekly"
-            latest_link = "/mnt/archive/weekly/current"
-            max_age_hours = 240
-            timer_unit = "archive.timer"
-            service_unit = "archive.service"
             """
         )
 
-        snapshot = config.backups.snapshot
-        self.assertIsNotNone(snapshot)
-        assert snapshot is not None
-        self.assertEqual(snapshot.mountpoint, "/mnt/archive")
-        self.assertEqual(snapshot.snapshots_dir, "/mnt/archive/weekly")
-        self.assertEqual(snapshot.latest_link, "/mnt/archive/weekly/current")
-        self.assertEqual(snapshot.max_age_hours, 240.0)
-        self.assertEqual(snapshot.timer_unit, "archive.timer")
-        self.assertEqual(snapshot.service_unit, "archive.service")
+        self.assertEqual(config.backups.snapshots, [])
+        self.assertTrue(any("snapshot" in warning for warning in config.warnings))
 
-    def test_relative_snapshot_paths_resolve_against_config_directory(self) -> None:
-        base = Path("/etc/labcheck")
-        config = config_from_toml(
-            {
-                "backups": {
-                    "snapshot": {
-                        "mountpoint": "archive",
-                        "snapshots_dir": "archive/snapshots",
-                        "latest_link": "archive/snapshots/latest",
-                    }
-                }
-            },
-            base_dir=base,
-        )
-
-        snapshot = config.backups.snapshot
-        self.assertIsNotNone(snapshot)
-        assert snapshot is not None
-        self.assertEqual(snapshot.mountpoint, str(base / "archive"))
-        self.assertEqual(snapshot.snapshots_dir, str(base / "archive/snapshots"))
-        self.assertEqual(snapshot.latest_link, str(base / "archive/snapshots/latest"))
-
-    def test_snapshot_can_be_disabled(self) -> None:
-        config = parse("[backups.snapshot]\nenabled = false")
-        snapshot = config.backups.snapshot
-        self.assertIsNotNone(snapshot)
-        assert snapshot is not None
-        self.assertFalse(snapshot.enabled)
-
-    def test_generic_targets_and_snapshot_can_coexist(self) -> None:
+    def test_snapshot_check_mount_defaults_to_true(self) -> None:
         config = parse(
             """
-            [[backups.targets]]
-            name = "database"
-            path = "/srv/database.dump"
-
-            [backups.snapshot]
-            enabled = true
+            [[backups.snapshots]]
+            name = "Media"
+            mountpoint = "/backup"
+            snapshots_dir = "/backup/snapshots"
+            latest_link = "/backup/snapshots/latest"
             """
         )
 
-        self.assertEqual(len(config.backups.targets), 1)
-        self.assertEqual(config.backups.targets[0].name, "database")
-        self.assertIsNotNone(config.backups.snapshot)
+        self.assertTrue(config.backups.snapshots[0].check_mount)
+
+    def test_snapshot_check_mount_can_be_disabled(self) -> None:
+        config = parse(
+            """
+            [[backups.snapshots]]
+            name = "Media"
+            mountpoint = "/backup"
+            snapshots_dir = "/backup/snapshots"
+            latest_link = "/backup/snapshots/latest"
+            check_mount = false
+            """
+        )
+
+        self.assertFalse(config.backups.snapshots[0].check_mount)
 
 
 class ValidationTest(unittest.TestCase):
@@ -328,7 +276,18 @@ class ValidationTest(unittest.TestCase):
         for max_age in (0, -1):
             with self.subTest(max_age=max_age):
                 self.assert_invalid(
-                    {"backups": {"snapshot": {"max_age_hours": max_age}}},
+                    {
+                        "backups": {
+                            "snapshots": [
+                                {
+                                    "mountpoint": "/backup",
+                                    "snapshots_dir": "/backup/snapshots",
+                                    "latest_link": "/backup/snapshots/latest",
+                                    "max_age_hours": max_age,
+                                }
+                            ]
+                        }
+                    },
                     "greater than zero",
                 )
 
@@ -336,7 +295,18 @@ class ValidationTest(unittest.TestCase):
         for key in ("timer_unit", "service_unit"):
             with self.subTest(key=key):
                 self.assert_invalid(
-                    {"backups": {"snapshot": {key: ""}}},
+                    {
+                        "backups": {
+                            "snapshots": [
+                                {
+                                    "mountpoint": "/backup",
+                                    "snapshots_dir": "/backup/snapshots",
+                                    "latest_link": "/backup/snapshots/latest",
+                                    key: "",
+                                }
+                            ]
+                        }
+                    },
                     "cannot be empty",
                 )
 

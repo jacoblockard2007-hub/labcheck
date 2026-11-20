@@ -17,8 +17,6 @@ All notable changes to labcheck are documented here. The format follows
 
 - Document Fedora Linux 45 and Ubuntu 26.04 compatibility.
 - Put a pipx quick start directly below the demo.
-- Retain the legacy `[backups.snapshot]` configuration while supporting the
-  new `[[backups.snapshots]]` form.
 - Interpret naive snapshot timestamps in the host's local timezone and support
   explicit numeric UTC offsets (`%z`); reject ambiguous `%Z` abbreviations.
 

@@ -83,6 +83,7 @@ class BackupTarget:
 @dataclass(frozen=True)
 class BackupSnapshotConfig:
     enabled: bool = True
+    check_mount: bool = True
     mountpoint: str = "/backup"
     snapshots_dir: str = "/backup/snapshots"
     latest_link: str = "/backup/snapshots/latest"
@@ -98,7 +99,6 @@ class BackupSnapshotConfig:
 class BackupsConfig:
     enabled: bool = True
     targets: list[BackupTarget] = field(default_factory=list)
-    snapshot: BackupSnapshotConfig | None = None
     snapshots: list[BackupSnapshotConfig] = field(default_factory=list)
 
 
@@ -299,70 +299,6 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             )
         )
 
-    snapshot_config = None
-    if "snapshot" in backups_raw:
-        snapshot_raw = _table(backups_raw, "snapshot", "backups", warnings)
-        where = "backups.snapshot"
-        _unknown_keys(
-            snapshot_raw,
-            {
-                "enabled",
-                "mountpoint",
-                "snapshots_dir",
-                "latest_link",
-                "max_age_hours",
-                "timer_unit",
-                "service_unit",
-            },
-            where,
-            warnings,
-        )
-
-        mountpoint = _resolve_path(
-            _string(snapshot_raw, "mountpoint", "/backup", where), base_dir
-        )
-        snapshots_dir = _resolve_path(
-            _string(snapshot_raw, "snapshots_dir", "/backup/snapshots", where),
-            base_dir,
-        )
-        latest_link = _resolve_path(
-            _string(snapshot_raw, "latest_link", "/backup/snapshots/latest", where),
-            base_dir,
-        )
-
-        for key, value in (
-            ("mountpoint", mountpoint),
-            ("snapshots_dir", snapshots_dir),
-            ("latest_link", latest_link),
-        ):
-            if not Path(value).is_absolute():
-                raise ConfigError(f"{where}.{key} must resolve to an absolute path")
-
-        max_age = _number(snapshot_raw, "max_age_hours", 192.0, where)
-        if max_age <= 0:
-            raise ConfigError(f"{where}.max_age_hours must be greater than zero")
-
-        timer_value = _string(snapshot_raw, "timer_unit", "", where)
-        service_value = _string(snapshot_raw, "service_unit", "", where)
-        if "timer_unit" in snapshot_raw and not timer_value:
-            raise ConfigError(f"{where}.timer_unit cannot be empty")
-        if "service_unit" in snapshot_raw and not service_value:
-            raise ConfigError(f"{where}.service_unit cannot be empty")
-        timer_unit = timer_value or None
-        service_unit = service_value or None
-        if (timer_unit is None) != (service_unit is None):
-            raise ConfigError(f"{where} must specify both timer_unit and service_unit")
-
-        snapshot_config = BackupSnapshotConfig(
-            enabled=_bool(snapshot_raw, "enabled", True, where),
-            mountpoint=mountpoint,
-            snapshots_dir=snapshots_dir,
-            latest_link=latest_link,
-            max_age_hours=max_age,
-            timer_unit=timer_unit,
-            service_unit=service_unit,
-        )
-
     snapshot_configs: list[BackupSnapshotConfig] = []
     for index, item in enumerate(
         _table_list(backups_raw, "snapshots", "backups", warnings)
@@ -373,6 +309,7 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             {
                 "name",
                 "enabled",
+                "check_mount",
                 "mountpoint",
                 "snapshots_dir",
                 "latest_link",
@@ -447,6 +384,7 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
         snapshot_configs.append(
             BackupSnapshotConfig(
                 enabled=_bool(item, "enabled", True, where),
+                check_mount=_bool(item, "check_mount", True, where),
                 mountpoint=mountpoint,
                 snapshots_dir=snapshots_dir,
                 latest_link=latest_link,
@@ -459,15 +397,12 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
             )
         )
     snapshot_names = [item.name for item in snapshot_configs]
-    if snapshot_config is not None:
-        snapshot_names.append(snapshot_config.name)
     if len(snapshot_names) != len(set(snapshot_names)):
         raise ConfigError("backup snapshot monitor names must be unique")
 
     backups = BackupsConfig(
         enabled=_bool(backups_raw, "enabled", True, "backups"),
         targets=backup_targets,
-        snapshot=snapshot_config,
         snapshots=snapshot_configs,
     )
 
@@ -593,7 +528,7 @@ _SECTION_KEYS = {
     "docker": {"enabled", "require_running", "ignore"},
     "raid": {"enabled"},
     "smart": {"enabled", "devices"},
-    "backups": {"enabled", "targets", "snapshot", "snapshots"},
+    "backups": {"enabled", "targets", "snapshots"},
     "certificates": {"enabled", "timeout_seconds", "targets"},
     "clock": {"enabled"},
 }
