@@ -95,11 +95,32 @@ class BackupSnapshotConfig:
     timestamp_format: str = "%Y-%m-%d"
 
 
+@dataclass(frozen=True)
+class BackupKopiaConfig:
+    enabled: bool = False
+    config_file: str = "/etc/kopia/mail-b2.config"
+    host: str = "mail"
+    user: str = "root"
+    source_paths: tuple[str, ...] = (
+        "/etc",
+        "/home",
+        "/var/mail",
+        "/var/vmail",
+        "/srv",
+        "/usr/local",
+        "/var/backups/mail-server",
+    )
+    max_age_hours: float = 30.0
+    timer_unit: str | None = None
+    service_unit: str | None = None
+
+
 @dataclass
 class BackupsConfig:
     enabled: bool = True
     targets: list[BackupTarget] = field(default_factory=list)
     snapshots: list[BackupSnapshotConfig] = field(default_factory=list)
+    kopia: BackupKopiaConfig = field(default_factory=BackupKopiaConfig)
 
 
 @dataclass(frozen=True)
@@ -400,10 +421,75 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
     if len(snapshot_names) != len(set(snapshot_names)):
         raise ConfigError("backup snapshot monitor names must be unique")
 
+    kopia_raw = _table(backups_raw, "kopia", "backups", warnings)
+    _unknown_keys(
+        kopia_raw,
+        {
+            "enabled",
+            "config_file",
+            "host",
+            "user",
+            "source_paths",
+            "max_age_hours",
+            "timer_unit",
+            "service_unit",
+        },
+        "backups.kopia",
+        warnings,
+    )
+    kopia_config_file = _resolve_path(
+        _string(kopia_raw, "config_file", "/etc/kopia/mail-b2.config", "backups.kopia"),
+        base_dir,
+    )
+    if not Path(kopia_config_file).is_absolute():
+        raise ConfigError("backups.kopia.config_file must resolve to an absolute path")
+    kopia_host = _string(kopia_raw, "host", "mail", "backups.kopia")
+    kopia_user = _string(kopia_raw, "user", "root", "backups.kopia")
+    if not kopia_host or not kopia_user:
+        raise ConfigError("backups.kopia.host and user cannot be empty")
+    kopia_sources = _string_list(
+        kopia_raw,
+        "source_paths",
+        [
+            "/etc",
+            "/home",
+            "/var/mail",
+            "/var/vmail",
+            "/srv",
+            "/usr/local",
+            "/var/backups/mail-server",
+        ],
+        "backups.kopia",
+    )
+    if not kopia_sources or any(not path.startswith("/") for path in kopia_sources):
+        raise ConfigError("backups.kopia.source_paths must contain absolute paths")
+    if len(kopia_sources) != len(set(kopia_sources)):
+        raise ConfigError("backups.kopia.source_paths must be unique")
+    kopia_max_age = _number(kopia_raw, "max_age_hours", 30.0, "backups.kopia")
+    if kopia_max_age <= 0:
+        raise ConfigError("backups.kopia.max_age_hours must be greater than zero")
+    kopia_timer = _optional_unit(kopia_raw, "timer_unit", "backups.kopia")
+    kopia_service = _optional_unit(kopia_raw, "service_unit", "backups.kopia")
+    if (kopia_timer is None) != (kopia_service is None):
+        raise ConfigError(
+            "backups.kopia must specify both timer_unit and service_unit"
+        )
+    kopia_config = BackupKopiaConfig(
+        enabled=_bool(kopia_raw, "enabled", False, "backups.kopia"),
+        config_file=kopia_config_file,
+        host=kopia_host,
+        user=kopia_user,
+        source_paths=tuple(kopia_sources),
+        max_age_hours=kopia_max_age,
+        timer_unit=kopia_timer,
+        service_unit=kopia_service,
+    )
+
     backups = BackupsConfig(
         enabled=_bool(backups_raw, "enabled", True, "backups"),
         targets=backup_targets,
         snapshots=snapshot_configs,
+        kopia=kopia_config,
     )
 
     certificates_raw = _table(raw, "certificates", "", warnings)
