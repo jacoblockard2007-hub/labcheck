@@ -572,9 +572,7 @@ class KopiaBackupConfigTest(unittest.TestCase):
 
     def test_kopia_timer_and_service_must_be_paired(self) -> None:
         with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
-            config_from_toml(
-                {"backups": {"kopia": {"timer_unit": "mail.timer"}}}
-            )
+            config_from_toml({"backups": {"kopia": {"timer_unit": "mail.timer"}}})
 
     def test_kopia_max_age_must_be_positive(self) -> None:
         with self.assertRaisesRegex(ConfigError, "greater than zero"):
