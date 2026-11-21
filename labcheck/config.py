@@ -471,9 +471,7 @@ def config_from_toml(raw: Mapping[str, Any], base_dir: Path | None = None) -> Co
     kopia_timer = _optional_unit(kopia_raw, "timer_unit", "backups.kopia")
     kopia_service = _optional_unit(kopia_raw, "service_unit", "backups.kopia")
     if (kopia_timer is None) != (kopia_service is None):
-        raise ConfigError(
-            "backups.kopia must specify both timer_unit and service_unit"
-        )
+        raise ConfigError("backups.kopia must specify both timer_unit and service_unit")
     kopia_config = BackupKopiaConfig(
         enabled=_bool(kopia_raw, "enabled", False, "backups.kopia"),
         config_file=kopia_config_file,
