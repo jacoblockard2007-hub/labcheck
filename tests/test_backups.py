@@ -650,11 +650,16 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
 
 class KopiaBackupCheckTest(LabcheckTestCase):
     SOURCES = (
-        "/etc", "/home", "/var/mail", "/var/vmail", "/srv",
-        "/usr/local", "/var/backups/mail-server",
+        "/etc",
+        "/home",
+        "/var/mail",
+        "/var/vmail",
+        "/srv",
+        "/usr/local",
+        "/var/backups/mail-server",
     )
 
-    def setup_kopia(self, *, records=None, repository=(0, "{}\n", "")):
+    def setup_kopia(self, *, records=None, repository=(0, "{}\\n", "")):
         from labcheck.config import BackupKopiaConfig
 
         config_path = self.temp / "etc" / "kopia" / "mail-b2.config"
@@ -678,18 +683,14 @@ class KopiaBackupCheckTest(LabcheckTestCase):
                 }
                 for index, path in enumerate(self.SOURCES)
             ]
-        runner = FakeRunner(
-            available={"kopia"},
-            responses={
-    
-            },
-        )
-        # The temporary directory name is dynamic; provide prefix responses.
-        runner.responses = {
-            "/usr/bin/kopia --config-file": lambda argv: (
-                0, "{}\n", ""
-            ) if "repository" in argv else (0, __import__("json").dumps(records), "")
-        }
+
+        def response(argv):
+            if "repository" in argv:
+                return repository
+            return (0, json.dumps(records), "")
+
+        runner = FakeRunner(available={"kopia"})
+        runner.responses["/usr/bin/kopia --config-file"] = response
         return config, runner
 
     def test_healthy_repository_and_all_seven_sources(self) -> None:
@@ -698,11 +699,15 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         self.assertEqual(result.status.value, "ok")
         self.assertIn("7/7 sources fresh", result.summary)
         self.assertEqual(len(runner.calls), 2)
-        self.assertEqual(
-            sum(m.name == "backup_kopia_source_present" and m.value == 1 for m in result.metrics),
-            7,
+        present = [
+            metric
+            for metric in result.metrics
+            if metric.name == "backup_kopia_source_present" and metric.value == 1
+        ]
+        self.assertEqual(len(present), 7)
+        self.assertTrue(
+            any("Kopia repository: accessible" in line for line in result.details)
         )
-        self.assertTrue(any("Kopia repository: accessible" in line for line in result.details))
 
     def test_missing_source_is_critical(self) -> None:
         config, runner = self.setup_kopia(records=[])
@@ -715,23 +720,32 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         records = [
             {
                 "id": "old-snapshot",
-                "source": {"host": "mail", "userName": "root", "path": "/var/vmail"},
+                "source": {
+                    "host": "mail",
+                    "userName": "root",
+                    "path": "/var/vmail",
+                },
                 "endTime": "2026-05-30T11:00:00Z",
                 "stats": {"errorCount": 1, "ignoredErrorCount": 0},
                 "rootEntry": {"summ": {"numFailed": 0}},
             }
         ]
-        runner.responses["/usr/bin/kopia --config-file"] = lambda argv: (
-            0, "{}\n", ""
-        ) if "repository" in argv else (0, json.dumps(records), "")
+
+        def response(argv):
+            if "repository" in argv:
+                return (0, "{}\\n", "")
+            return (0, json.dumps(records), "")
+
+        runner.responses["/usr/bin/kopia --config-file"] = response
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
         self.assertIn("/var/vmail stale", result.summary)
         self.assertIn("/var/vmail snapshot errors", result.summary)
 
     def test_repository_failure_does_not_expose_command_output(self) -> None:
-        config, runner = self.setup_kopia(repository=(1, "", "secret-looking diagnostic"))
-        runner.responses["/usr/bin/kopia --config-file"] = (1, "", "secret-looking diagnostic")
+        config, runner = self.setup_kopia(
+            repository=(1, "", "secret-looking diagnostic")
+        )
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
         self.assertNotIn("secret-looking", " ".join(result.details))
