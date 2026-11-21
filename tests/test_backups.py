@@ -697,7 +697,8 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         config, runner = self.setup_kopia()
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(
-            result.status.value, "ok",
+            result.status.value,
+            "ok",
             msg=f"summary={result.summary!r}; details={result.details!r}",
         )
         self.assertIn("7/7 sources fresh", result.summary)
@@ -716,7 +717,8 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         config, runner = self.setup_kopia(records=[])
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(
-            result.status.value, "crit",
+            result.status.value,
+            "crit",
             msg=f"summary={result.summary!r}; details={result.details!r}",
         )
         self.assertIn("/var/backups/mail-server missing", result.summary)
@@ -745,7 +747,8 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         runner.responses["/usr/bin/kopia --config-file"] = response
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(
-            result.status.value, "crit",
+            result.status.value,
+            "crit",
             msg=f"summary={result.summary!r}; details={result.details!r}",
         )
         self.assertIn("/var/vmail stale", result.summary)
