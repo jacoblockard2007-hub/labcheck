@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time as time_module
 import unittest
@@ -647,11 +648,6 @@ class GeneralizedSnapshotCheckTest(LabcheckTestCase):
                 self.assertEqual(result.status.value, "ok")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-
 class KopiaBackupCheckTest(LabcheckTestCase):
     SOURCES = (
         "/etc", "/home", "/var/mail", "/var/vmail", "/srv",
@@ -685,8 +681,7 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         runner = FakeRunner(
             available={"kopia"},
             responses={
-                "/usr/bin/kopia --config-file /tmp/kopia-test/etc/kopia/mail-b2.config repository status --json": repository,
-                "/usr/bin/kopia --config-file /tmp/kopia-test/etc/kopia/mail-b2.config snapshot list --all --json": (0, __import__("json").dumps(records), ""),
+    
             },
         )
         # The temporary directory name is dynamic; provide prefix responses.
@@ -716,8 +711,6 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         self.assertIn("/var/backups/mail-server missing", result.summary)
 
     def test_stale_source_and_snapshot_errors_are_critical(self) -> None:
-        import json
-
         config, runner = self.setup_kopia()
         records = [
             {
@@ -742,3 +735,7 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         result = backups.run(self.context(config=config, runner=runner))
         self.assertEqual(result.status.value, "crit")
         self.assertNotIn("secret-looking", " ".join(result.details))
+
+
+if __name__ == "__main__":
+    unittest.main()
