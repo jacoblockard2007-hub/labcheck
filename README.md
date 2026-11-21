@@ -55,7 +55,7 @@ overkill for "is everything still fine?". `labcheck` is meant to be:
 | `docker` | Container states, unhealthy containers, required containers | Docker is not installed |
 | `raid` | Linux md software RAID arrays from `/proc/mdstat` | no arrays are present |
 | `smart` | SMART overall health via `smartctl` (opt-in) | no devices configured or `smartctl` missing |
-| `backups` | Freshness of configured backup files and named snapshot directories, with optional systemd schedule checks | no targets or snapshots configured |
+| `backups` | Freshness of configured backup files and named snapshot directories; optional read-only Kopia repository and per-source snapshot checks, with optional systemd schedule checks | no targets, snapshots or enabled Kopia monitor configured |
 | `certificates` | TLS certificate expiry for remote endpoints | no targets configured |
 | `clock` | NTP synchronisation via `timedatectl` | `timedatectl` or systemd is unavailable |
 
@@ -217,6 +217,19 @@ max_age_hours = 192
 timer_unit = "project-data-weekly.timer"
 service_unit = "project-data-weekly.service"
 
+# Kopia/B2 monitoring is opt-in. The CLI reads its existing protected config;
+# do not copy B2 credentials into labcheck configuration.
+[backups.kopia]
+enabled = true
+config_file = "/etc/kopia/mail-b2.config"
+host = "mail"
+user = "root"
+source_paths = ["/etc", "/home", "/var/mail", "/var/vmail", "/srv",
+                "/usr/local", "/var/backups/mail-server"]
+max_age_hours = 30
+timer_unit = "mail-kopia-backup.timer"
+service_unit = "mail-kopia-backup.service"
+
 [certificates]
 [[certificates.targets]]
 host = "cloud.example.com"
@@ -231,6 +244,7 @@ Notes:
 - Add more `[[backups.snapshots]]` tables to monitor independent snapshot
   sets. Each requires `mountpoint`, `snapshots_dir` and `latest_link`; `name`
   defaults to the snapshot directory's basename.
+- The optional [backups.kopia] monitor invokes Kopia repository status and snapshot inventory commands in JSON mode using the configured CLI config file. It checks each exact (host, user, source path) independently for a completed, fresh snapshot and reports snapshot error counters. It never creates snapshots, runs maintenance, changes retention, or modifies the repository. The monitor is disabled by default. Keep B2 credentials in Kopia's protected config file, not in the Labcheck TOML. source_paths must be absolute and unique; max_age_hours defaults to 30. Optional timer_unit and service_unit must be configured together.
 - `name_prefix` is removed before parsing the timestamp with
   `timestamp_format` (a Python `datetime` format). Timestamps without a numeric
   UTC offset are interpreted in the host's local timezone. Use `%z` for an
@@ -261,7 +275,7 @@ Notes:
 | `[docker]` | `enabled`, `require_running = []`, `ignore = []` |
 | `[raid]` | `enabled` |
 | `[smart]` | `enabled = false`, `devices = []` |
-| `[backups]` | `enabled`; `[[backups.targets]]` with `name`, `path`, `max_age_hours = 24`, optional paired `timer_unit`/`service_unit`; `[[backups.snapshots]]` with `name`, `enabled`, `check_mount = true`, `mountpoint`, `snapshots_dir`, `latest_link`, `name_prefix`, `timestamp_format`, `max_age_hours`, optional paired `timer_unit`/`service_unit` |
+| `[backups]` | `enabled`; `[[backups.targets]]` with `name`, `path`, `max_age_hours = 24`, optional paired `timer_unit`/`service_unit`; `[[backups.snapshots]]` with `name`, `enabled`, `check_mount = true`, `mountpoint`, `snapshots_dir`, `latest_link`, `name_prefix`, `timestamp_format`, `max_age_hours`, optional paired `timer_unit`/`service_unit`; `[backups.kopia]` with `enabled = false`, `config_file`, `host`, `user`, `source_paths`, `max_age_hours = 30`, optional paired `timer_unit`/`service_unit` |
 | `[certificates]` | `enabled`, `timeout_seconds = 5`, `[[certificates.targets]]` with `host`, `port = 443`, `warn_days = 14`, `crit_days = 7` |
 | `[clock]` | `enabled` |
 
@@ -372,6 +386,7 @@ Every check-specific metric is prefixed with `labcheck_`.
 | `labcheck_smart_healthy` | `device` | SMART health verdict |
 | `labcheck_backup_present`, `labcheck_backup_age_hours` | `target` | Generic file backup presence and freshness |
 | `labcheck_backup_snapshot_present`, `labcheck_backup_snapshot_age_hours`, `labcheck_backup_incomplete_snapshots` | `snapshot` | Snapshot presence, age and incomplete snapshot count |
+| `labcheck_backup_kopia_repository_accessible`, `labcheck_backup_kopia_source_present`, `labcheck_backup_kopia_source_age_hours`, `labcheck_backup_kopia_source_errors`, `labcheck_backup_kopia_sources_expected` | `source` where applicable | Kopia repository reachability and per-source snapshot presence, age and error counts |
 | `labcheck_backup_timer_enabled`, `labcheck_backup_timer_active`, `labcheck_backup_service_success` | `target` (generic targets), `snapshot` (snapshot monitors) | Backup timer enabled state, active state and last service-run success |
 | `labcheck_certificate_days_remaining` | `host`, `port` | Days until expiry |
 | `labcheck_ntp_synchronized` | | Clock is synchronised |
