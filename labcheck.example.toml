@@ -101,6 +101,21 @@ max_age_hours = 168
 # timer_unit = "application-data-weekly.timer"
 # service_unit = "application-data-weekly.service"
 #
+# Optional Kopia repository monitor. Uses the local Kopia CLI and its existing
+# protected config file; B2 credentials do not belong in labcheck.toml.
+# Snapshot age is checked independently for every expected source.
+#
+# [backups.kopia]
+# enabled = true
+# config_file = "/etc/kopia/mail-b2.config"
+# host = "mail"
+# user = "root"
+# source_paths = ["/etc", "/home", "/var/mail", "/var/vmail", "/srv",
+#                 "/usr/local", "/var/backups/mail-server"]
+# max_age_hours = 30
+# timer_unit = "mail-kopia-backup.timer"
+# service_unit = "mail-kopia-backup.service"
+#
 # Generic file targets may also verify their systemd schedule and last run.
 # timer_unit and service_unit must be specified together.
 # [[backups.targets]]
