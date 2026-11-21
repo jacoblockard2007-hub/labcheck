@@ -29,7 +29,9 @@ def run(ctx: Context) -> CheckResult:
             title=TITLE,
             status=Status.SKIP,
             summary="no backup targets configured",
-            details=["add [[backups.targets]], [[backups.snapshots]], or [backups.kopia] configuration"],
+            details=[
+                "add [[backups.targets]], [[backups.snapshots]], or [backups.kopia] configuration"
+            ],
         )
 
     status = Status.OK
@@ -69,7 +71,6 @@ def run(ctx: Context) -> CheckResult:
 
 
 
-
 def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
     """Inspect Kopia repository and per-source snapshot inventory read-only."""
     details: list[str] = []
@@ -95,15 +96,11 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
             title=TITLE,
             status=Status.CRIT,
             summary="Kopia configuration file missing",
-            details=[
-                f"configured Kopia config file is not present: {cfg.config_file}"
-            ],
+            details=[f"configured Kopia config file is not present: {cfg.config_file}"],
         )
 
     base = [kopia, "--config-file", str(config_file)]
-    repository = ctx.runner.run(
-        [*base, "repository", "status", "--json"], timeout=30
-    )
+    repository = ctx.runner.run([*base, "repository", "status", "--json"], timeout=30)
     if _command_unavailable(repository) or repository.returncode != 0:
         return _kopia_command_error("repository status", repository)
     try:
@@ -140,9 +137,7 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
     if _command_unavailable(snapshots) or snapshots.returncode != 0:
         result = _kopia_command_error("snapshot list", snapshots)
         result.details.insert(0, "Kopia repository: accessible")
-        result.metrics.insert(
-            0, Metric("backup_kopia_repository_accessible", 1)
-        )
+        result.metrics.insert(0, Metric("backup_kopia_repository_accessible", 1))
         return result
     try:
         records = json.loads(snapshots.stdout)
@@ -189,9 +184,7 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
             continue
 
         try:
-            latest = max(
-                matching, key=lambda item: _kopia_timestamp(item["endTime"])
-            )
+            latest = max(matching, key=lambda item: _kopia_timestamp(item["endTime"]))
             completed_at = _kopia_timestamp(latest["endTime"])
         except (KeyError, TypeError, ValueError, OverflowError):
             status = worse(status, Status.ERROR)
@@ -272,7 +265,9 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
 
 def _kopia_timestamp(value: str) -> datetime:
     """Parse Kopia RFC3339 timestamps, including trailing Z."""
-    return datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    return datetime.fromisoformat(
+        value[:-1] + "+00:00" if value.endswith("Z") else value
+    )
 
 
 def _nonnegative_int(value: object) -> int:
@@ -282,11 +277,7 @@ def _nonnegative_int(value: object) -> int:
 
 
 def _kopia_command_error(operation: str, result) -> CheckResult:
-    status = (
-        Status.ERROR
-        if not result.found or result.timed_out
-        else Status.CRIT
-    )
+    status = Status.ERROR if not result.found or result.timed_out else Status.CRIT
     message = (
         "command unavailable or timed out"
         if status is Status.ERROR
@@ -300,6 +291,7 @@ def _kopia_command_error(operation: str, result) -> CheckResult:
         summary=f"Kopia {operation} {message}",
         details=[f"Kopia {operation}: {message}"],
     )
+
 
 def _check_targets(ctx: Context, targets: list[BackupTarget]) -> CheckResult:
     """Check the original generic backup targets without changing their behavior."""
