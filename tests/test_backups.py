@@ -659,7 +659,7 @@ class KopiaBackupCheckTest(LabcheckTestCase):
         "/var/backups/mail-server",
     )
 
-    def setup_kopia(self, *, records=None, repository=(0, "{}\\n", "")):
+    def setup_kopia(self, *, records=None, repository=(0, "{}\n", "")):
         from labcheck.config import BackupKopiaConfig
 
         config_path = self.temp / "etc" / "kopia" / "mail-b2.config"
@@ -733,7 +733,7 @@ class KopiaBackupCheckTest(LabcheckTestCase):
 
         def response(argv):
             if "repository" in argv:
-                return (0, "{}\\n", "")
+                return (0, "{}\n", "")
             return (0, json.dumps(records), "")
 
         runner.responses["/usr/bin/kopia --config-file"] = response
