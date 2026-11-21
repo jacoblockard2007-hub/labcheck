@@ -696,7 +696,10 @@ class KopiaBackupCheckTest(LabcheckTestCase):
     def test_healthy_repository_and_all_seven_sources(self) -> None:
         config, runner = self.setup_kopia()
         result = backups.run(self.context(config=config, runner=runner))
-        self.assertEqual(result.status.value, "ok")
+        self.assertEqual(
+            result.status.value, "ok",
+            msg=f"summary={result.summary!r}; details={result.details!r}",
+        )
         self.assertIn("7/7 sources fresh", result.summary)
         self.assertEqual(len(runner.calls), 2)
         present = [
@@ -712,7 +715,10 @@ class KopiaBackupCheckTest(LabcheckTestCase):
     def test_missing_source_is_critical(self) -> None:
         config, runner = self.setup_kopia(records=[])
         result = backups.run(self.context(config=config, runner=runner))
-        self.assertEqual(result.status.value, "crit")
+        self.assertEqual(
+            result.status.value, "crit",
+            msg=f"summary={result.summary!r}; details={result.details!r}",
+        )
         self.assertIn("/var/backups/mail-server missing", result.summary)
 
     def test_stale_source_and_snapshot_errors_are_critical(self) -> None:
@@ -738,7 +744,10 @@ class KopiaBackupCheckTest(LabcheckTestCase):
 
         runner.responses["/usr/bin/kopia --config-file"] = response
         result = backups.run(self.context(config=config, runner=runner))
-        self.assertEqual(result.status.value, "crit")
+        self.assertEqual(
+            result.status.value, "crit",
+            msg=f"summary={result.summary!r}; details={result.details!r}",
+        )
         self.assertIn("/var/vmail stale", result.summary)
         self.assertIn("/var/vmail snapshot errors", result.summary)
 
