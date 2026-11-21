@@ -29,10 +29,7 @@ def run(ctx: Context) -> CheckResult:
             title=TITLE,
             status=Status.SKIP,
             summary="no backup targets configured",
-            details=[
-                "add [[backups.targets]], [[backups.snapshots]], or "
-                "[backups.kopia] configuration"
-            ],
+            details=["add [[backups.targets]], [[backups.snapshots]], or [backups.kopia] configuration"],
         )
 
     status = Status.OK
