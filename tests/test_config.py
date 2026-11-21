@@ -38,6 +38,7 @@ class DefaultsTest(unittest.TestCase):
         self.assertFalse(config.smart.enabled)
         self.assertEqual(config.smart.devices, [])
         self.assertEqual(config.backups.targets, [])
+        self.assertFalse(config.backups.kopia.enabled)
         self.assertEqual(config.certificates.targets, [])
         self.assertEqual(config.warnings, [])
 
@@ -534,3 +535,52 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class KopiaBackupConfigTest(unittest.TestCase):
+    def test_kopia_monitor_defaults_to_disabled_with_seven_sources(self) -> None:
+        config = parse("[backups.kopia]\nenabled = false\n")
+        kopia = config.backups.kopia
+        self.assertFalse(kopia.enabled)
+        self.assertEqual(kopia.config_file, "/etc/kopia/mail-b2.config")
+        self.assertEqual(kopia.host, "mail")
+        self.assertEqual(kopia.user, "root")
+        self.assertEqual(len(kopia.source_paths), 7)
+        self.assertIn("/var/backups/mail-server", kopia.source_paths)
+        self.assertEqual(kopia.max_age_hours, 30)
+
+    def test_kopia_paths_and_units_are_parsed(self) -> None:
+        config = parse(
+            """
+            [backups.kopia]
+            enabled = true
+            config_file = "/etc/kopia/production.config"
+            host = "mail"
+            user = "root"
+            source_paths = ["/etc", "/var/vmail"]
+            max_age_hours = 36
+            timer_unit = "mail-kopia-backup.timer"
+            service_unit = "mail-kopia-backup.service"
+            """
+        )
+        kopia = config.backups.kopia
+        self.assertTrue(kopia.enabled)
+        self.assertEqual(kopia.source_paths, ("/etc", "/var/vmail"))
+        self.assertEqual(kopia.timer_unit, "mail-kopia-backup.timer")
+        self.assertEqual(kopia.service_unit, "mail-kopia-backup.service")
+
+    def test_kopia_source_paths_must_be_absolute_and_unique(self) -> None:
+        for paths in (["etc"], ["/etc", "/etc"]):
+            with self.subTest(paths=paths), self.assertRaises(ConfigError):
+                config_from_toml({"backups": {"kopia": {"source_paths": paths}}})
+
+    def test_kopia_timer_and_service_must_be_paired(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "both timer_unit and service_unit"):
+            config_from_toml(
+                {"backups": {"kopia": {"timer_unit": "mail.timer"}}}
+            )
+
+    def test_kopia_max_age_must_be_positive(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "greater than zero"):
+            config_from_toml({"backups": {"kopia": {"max_age_hours": 0}}})
