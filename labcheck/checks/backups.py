@@ -273,7 +273,7 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
 
 def _kopia_timestamp(value: str) -> datetime:
     """Parse Kopia RFC3339 timestamps, including trailing Z."""
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
 
 
 def _nonnegative_int(value: object) -> int:
