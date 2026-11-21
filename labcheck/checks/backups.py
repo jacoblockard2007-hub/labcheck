@@ -70,6 +70,7 @@ def run(ctx: Context) -> CheckResult:
     )
 
 
+
 def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
     """Inspect Kopia repository and per-source snapshot inventory read-only."""
     details: list[str] = []
