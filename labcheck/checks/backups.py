@@ -29,7 +29,8 @@ def run(ctx: Context) -> CheckResult:
             title=TITLE,
             status=Status.SKIP,
             summary="no backup targets configured",
-            details=["add [[backups.targets]], [[backups.snapshots]], or [backups.kopia] configuration"],
+            details=[\n                "add [[backups.targets]], [[backups.snapshots]], or "
+                "[backups.kopia] configuration"\n            ],
         )
 
     status = Status.OK
@@ -69,6 +70,7 @@ def run(ctx: Context) -> CheckResult:
 
 
 
+
 def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
     """Inspect Kopia repository and per-source snapshot inventory read-only."""
     details: list[str] = []
@@ -77,86 +79,160 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
     status = Status.OK
     kopia = ctx.runner.which("kopia")
     if kopia is None:
-        return CheckResult(name=NAME, title=TITLE, status=Status.ERROR,
-                           summary="Kopia CLI unavailable",
-                           details=["kopia executable was not found"])
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.ERROR,
+            summary="Kopia CLI unavailable",
+            details=["kopia executable was not found"],
+        )
 
     config_file = Path(cfg.config_file)
-    if ctx.root != Path("/") and config_file.is_absolute():
+    if ctx.root != Path("/"):
         config_file = ctx.root / config_file.relative_to("/")
     if not config_file.is_file():
-        return CheckResult(name=NAME, title=TITLE, status=Status.CRIT,
-                           summary="Kopia configuration file missing",
-                           details=[f"configured Kopia config file is not present: {cfg.config_file}"])
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.CRIT,
+            summary="Kopia configuration file missing",
+            details=[
+                f"configured Kopia config file is not present: {cfg.config_file}"
+            ],
+        )
 
     base = [kopia, "--config-file", str(config_file)]
-    repository = ctx.runner.run([*base, "repository", "status", "--json"], timeout=30)
+    repository = ctx.runner.run(
+        [*base, "repository", "status", "--json"], timeout=30
+    )
     if _command_unavailable(repository) or repository.returncode != 0:
         return _kopia_command_error("repository status", repository)
     try:
         repository_data = json.loads(repository.stdout)
     except (json.JSONDecodeError, TypeError):
-        return CheckResult(name=NAME, title=TITLE, status=Status.ERROR,
-                           summary="Kopia repository status returned invalid JSON",
-                           details=["could not parse repository status JSON"])
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.ERROR,
+            summary="Kopia repository status returned invalid JSON",
+            details=["could not parse repository status JSON"],
+        )
     if not isinstance(repository_data, dict):
-        return CheckResult(name=NAME, title=TITLE, status=Status.ERROR,
-                           summary="Kopia repository status returned unexpected data",
-                           details=["repository status JSON must be an object"])
-    details.append("Kopia repository: accessible")
-    metrics.append(Metric("backup_kopia_repository_accessible", 1, help="Kopia repository is accessible"))
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.ERROR,
+            summary="Kopia repository status returned unexpected data",
+            details=["repository status JSON must be an object"],
+        )
 
-    snapshots = ctx.runner.run([*base, "snapshot", "list", "--all", "--json"], timeout=60)
+    details.append("Kopia repository: accessible")
+    metrics.append(
+        Metric(
+            "backup_kopia_repository_accessible",
+            1,
+            help="Kopia repository is accessible",
+        )
+    )
+
+    snapshots = ctx.runner.run(
+        [*base, "snapshot", "list", "--all", "--json"], timeout=60
+    )
     if _command_unavailable(snapshots) or snapshots.returncode != 0:
         result = _kopia_command_error("snapshot list", snapshots)
         result.details.insert(0, "Kopia repository: accessible")
-        result.metrics.insert(0, Metric("backup_kopia_repository_accessible", 1))
+        result.metrics.insert(
+            0, Metric("backup_kopia_repository_accessible", 1)
+        )
         return result
     try:
         records = json.loads(snapshots.stdout)
     except (json.JSONDecodeError, TypeError):
-        return CheckResult(name=NAME, title=TITLE, status=Status.ERROR,
-                           summary="Kopia snapshot inventory returned invalid JSON",
-                           details=details + ["could not parse snapshot inventory JSON"], metrics=metrics)
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.ERROR,
+            summary="Kopia snapshot inventory returned invalid JSON",
+            details=details + ["could not parse snapshot inventory JSON"],
+            metrics=metrics,
+        )
     if not isinstance(records, list):
-        return CheckResult(name=NAME, title=TITLE, status=Status.ERROR,
-                           summary="Kopia snapshot inventory returned unexpected data",
-                           details=details + ["snapshot inventory JSON must be an array"], metrics=metrics)
+        return CheckResult(
+            name=NAME,
+            title=TITLE,
+            status=Status.ERROR,
+            summary="Kopia snapshot inventory returned unexpected data",
+            details=details + ["snapshot inventory JSON must be an array"],
+            metrics=metrics,
+        )
 
-    now = ctx.now.timestamp()
     for source_path in cfg.source_paths:
-        matching = [item for item in records if isinstance(item, dict)
-                    and isinstance(item.get("source"), dict)
-                    and item["source"].get("host") == cfg.host
-                    and item["source"].get("userName") == cfg.user
-                    and item["source"].get("path") == source_path
-                    and item.get("endTime")]
+        matching = [
+            item
+            for item in records
+            if isinstance(item, dict)
+            and isinstance(item.get("source"), dict)
+            and item["source"].get("host") == cfg.host
+            and item["source"].get("userName") == cfg.user
+            and item["source"].get("path") == source_path
+            and item.get("endTime")
+        ]
         if not matching:
             status = worse(status, Status.CRIT)
             findings.append(f"{source_path} missing")
-            details.append(f"{source_path}: no completed Kopia snapshot found for {cfg.host}/{cfg.user}")
-            metrics.append(Metric("backup_kopia_source_present", 0, {"source": source_path}))
+            details.append(
+                f"{source_path}: no completed Kopia snapshot found for "
+                f"{cfg.host}/{cfg.user}"
+            )
+            metrics.append(
+                Metric("backup_kopia_source_present", 0, {"source": source_path})
+            )
             continue
+
         try:
-            latest = max(matching, key=lambda item: _kopia_timestamp(item["endTime"]))
+            latest = max(
+                matching, key=lambda item: _kopia_timestamp(item["endTime"])
+            )
             completed_at = _kopia_timestamp(latest["endTime"])
         except (KeyError, TypeError, ValueError, OverflowError):
             status = worse(status, Status.ERROR)
             findings.append(f"{source_path} has invalid snapshot metadata")
-            details.append(f"{source_path}: unable to parse snapshot completion timestamp")
-            metrics.append(Metric("backup_kopia_source_present", 0, {"source": source_path}))
+            details.append(
+                f"{source_path}: unable to parse snapshot completion timestamp"
+            )
+            metrics.append(
+                Metric("backup_kopia_source_present", 0, {"source": source_path})
+            )
             continue
-        age_seconds = max(0.0, now - completed_at.timestamp())
+
+        age_seconds = max(0.0, (ctx.now - completed_at).total_seconds())
         age_hours = age_seconds / 3600
-        metrics.append(Metric("backup_kopia_source_present", 1, {"source": source_path}))
-        metrics.append(Metric("backup_kopia_source_age_hours", round(age_hours, 2), {"source": source_path}))
-        stats = latest.get("stats") if isinstance(latest.get("stats"), dict) else {}
-        root_entry = latest.get("rootEntry") if isinstance(latest.get("rootEntry"), dict) else {}
-        root_summary = root_entry.get("summ") if isinstance(root_entry.get("summ"), dict) else {}
-        errors = (_nonnegative_int(stats.get("errorCount"))
-                  + _nonnegative_int(stats.get("ignoredErrorCount"))
-                  + _nonnegative_int(root_summary.get("numFailed")))
-        details.append(f"{source_path}: {human_duration(age_seconds)} old (limit {cfg.max_age_hours:g}h), errors={errors}")
+        metrics.append(
+            Metric("backup_kopia_source_present", 1, {"source": source_path})
+        )
+        metrics.append(
+            Metric(
+                "backup_kopia_source_age_hours",
+                round(age_hours, 2),
+                {"source": source_path},
+            )
+        )
+
+        stats = latest.get("stats")
+        stats = stats if isinstance(stats, dict) else {}
+        root_entry = latest.get("rootEntry")
+        root_entry = root_entry if isinstance(root_entry, dict) else {}
+        root_summary = root_entry.get("summ")
+        root_summary = root_summary if isinstance(root_summary, dict) else {}
+        errors = (
+            _nonnegative_int(stats.get("errorCount"))
+            + _nonnegative_int(stats.get("ignoredErrorCount"))
+            + _nonnegative_int(root_summary.get("numFailed"))
+        )
+        details.append(
+            f"{source_path}: {human_duration(age_seconds)} old "
+            f"(limit {cfg.max_age_hours:g}h), errors={errors}"
+        )
         if age_hours > cfg.max_age_hours:
             status = worse(status, Status.CRIT)
             findings.append(f"{source_path} stale")
@@ -166,18 +242,33 @@ def _check_kopia(ctx: Context, cfg: BackupKopiaConfig) -> CheckResult:
         if not latest.get("id"):
             status = worse(status, Status.ERROR)
             findings.append(f"{source_path} snapshot ID unavailable")
-        metrics.append(Metric("backup_kopia_source_errors", errors, {"source": source_path}))
+        metrics.append(
+            Metric("backup_kopia_source_errors", errors, {"source": source_path})
+        )
 
     metrics.append(Metric("backup_kopia_sources_expected", len(cfg.source_paths)))
     if cfg.timer_unit and cfg.service_unit:
         unit_status, unit_details, unit_metrics, unit_findings = _check_units(
-            ctx, cfg.timer_unit, cfg.service_unit, "Kopia", "target")
+            ctx, cfg.timer_unit, cfg.service_unit, "Kopia", "target"
+        )
         status = worse(status, unit_status)
         details.extend(unit_details)
         metrics.extend(unit_metrics)
         findings.extend(unit_findings)
-    summary = ", ".join(findings) if findings else f"{len(cfg.source_paths)}/{len(cfg.source_paths)} sources fresh"
-    return CheckResult(name=NAME, title=TITLE, status=status, summary=summary, details=details, metrics=metrics)
+
+    summary = (
+        ", ".join(findings)
+        if findings
+        else f"{len(cfg.source_paths)}/{len(cfg.source_paths)} sources fresh"
+    )
+    return CheckResult(
+        name=NAME,
+        title=TITLE,
+        status=status,
+        summary=summary,
+        details=details,
+        metrics=metrics,
+    )
 
 
 def _kopia_timestamp(value: str) -> datetime:
@@ -192,12 +283,24 @@ def _nonnegative_int(value: object) -> int:
 
 
 def _kopia_command_error(operation: str, result) -> CheckResult:
-    status = Status.ERROR if not result.found or result.timed_out else Status.CRIT
-    message = "command unavailable or timed out" if status is Status.ERROR else "command failed"
+    status = (
+        Status.ERROR
+        if not result.found or result.timed_out
+        else Status.CRIT
+    )
+    message = (
+        "command unavailable or timed out"
+        if status is Status.ERROR
+        else "command failed"
+    )
     # Do not expose raw Kopia output; diagnostics can contain sensitive details.
-    return CheckResult(name=NAME, title=TITLE, status=status,
-                       summary=f"Kopia {operation} {message}",
-                       details=[f"Kopia {operation}: {message}"])
+    return CheckResult(
+        name=NAME,
+        title=TITLE,
+        status=status,
+        summary=f"Kopia {operation} {message}",
+        details=[f"Kopia {operation}: {message}"],
+    )
 
 def _check_targets(ctx: Context, targets: list[BackupTarget]) -> CheckResult:
     """Check the original generic backup targets without changing their behavior."""
