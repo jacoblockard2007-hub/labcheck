@@ -533,11 +533,6 @@ class GeneralizedBackupConfigTest(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-
 class KopiaBackupConfigTest(unittest.TestCase):
     def test_kopia_monitor_defaults_to_disabled_with_seven_sources(self) -> None:
         config = parse("[backups.kopia]\nenabled = false\n")
@@ -584,3 +579,7 @@ class KopiaBackupConfigTest(unittest.TestCase):
     def test_kopia_max_age_must_be_positive(self) -> None:
         with self.assertRaisesRegex(ConfigError, "greater than zero"):
             config_from_toml({"backups": {"kopia": {"max_age_hours": 0}}})
+
+
+if __name__ == "__main__":
+    unittest.main()
